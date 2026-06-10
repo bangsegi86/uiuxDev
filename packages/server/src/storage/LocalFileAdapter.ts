@@ -1,9 +1,10 @@
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import type {
+  Board,
   CustomComponent,
   Project,
-  ScreenDoc,
+  Screen,
   Template,
   TreeNode
 } from '@uiux/shared'
@@ -61,6 +62,12 @@ export class LocalFileAdapter implements StorageAdapter {
   private screenFile(projectId: string, screenId: string) {
     return path.join(this.screensDir(projectId), `${screenId}.json`)
   }
+  private boardsDir(projectId: string) {
+    return path.join(this.projectDir(projectId), 'boards')
+  }
+  private boardFile(projectId: string, boardId: string) {
+    return path.join(this.boardsDir(projectId), `${boardId}.json`)
+  }
 
   // --- low-level json io ---
   private async readJson<T>(file: string, fallback: T): Promise<T> {
@@ -90,6 +97,19 @@ export class LocalFileAdapter implements StorageAdapter {
       const file = this.screenFile(p.id, screenId)
       try {
         await fs.access(file)
+        return p.id
+      } catch {
+        // not in this project
+      }
+    }
+    return null
+  }
+
+  private async findBoardProject(boardId: string): Promise<string | null> {
+    const projects = await this.listProjects()
+    for (const p of projects) {
+      try {
+        await fs.access(this.boardFile(p.id, boardId))
         return p.id
       } catch {
         // not in this project
@@ -129,6 +149,7 @@ export class LocalFileAdapter implements StorageAdapter {
     await this.writeJson(this.componentsFile(p.id), [])
     await this.writeJson(this.templatesFile(p.id), [])
     await fs.mkdir(this.screensDir(p.id), { recursive: true })
+    await fs.mkdir(this.boardsDir(p.id), { recursive: true })
     return p
   }
   async updateProject(id: string, patch: Partial<Project>): Promise<Project | null> {
@@ -194,23 +215,26 @@ export class LocalFileAdapter implements StorageAdapter {
       if (toRemove.has(n.id) && n.type === 'screen' && n.screenId) {
         await fs.rm(this.screenFile(node.projectId, n.screenId), { force: true })
       }
+      if (toRemove.has(n.id) && n.type === 'board' && n.boardId) {
+        await fs.rm(this.boardFile(node.projectId, n.boardId), { force: true })
+      }
     }
   }
 
   // --- screens ---
-  async getScreen(id: string): Promise<ScreenDoc | null> {
+  async getScreen(id: string): Promise<Screen | null> {
     const projectId = await this.findScreenProject(id)
     if (!projectId) return null
-    return this.readJson<ScreenDoc | null>(this.screenFile(projectId, id), null)
+    return this.readJson<Screen | null>(this.screenFile(projectId, id), null)
   }
-  async createScreen(projectId: string, screen: ScreenDoc): Promise<ScreenDoc> {
+  async createScreen(projectId: string, screen: Screen): Promise<Screen> {
     await this.writeJson(this.screenFile(projectId, screen.id), screen)
     return screen
   }
-  async updateScreen(id: string, patch: Partial<ScreenDoc>): Promise<ScreenDoc | null> {
+  async updateScreen(id: string, patch: Partial<Screen>): Promise<Screen | null> {
     const projectId = await this.findScreenProject(id)
     if (!projectId) return null
-    const current = await this.readJson<ScreenDoc | null>(this.screenFile(projectId, id), null)
+    const current = await this.readJson<Screen | null>(this.screenFile(projectId, id), null)
     if (!current) return null
     const next = { ...current, ...patch, id }
     await this.writeJson(this.screenFile(projectId, id), next)
@@ -220,6 +244,31 @@ export class LocalFileAdapter implements StorageAdapter {
     const projectId = await this.findScreenProject(id)
     if (!projectId) return
     await fs.rm(this.screenFile(projectId, id), { force: true })
+  }
+
+  // --- boards ---
+  async getBoard(id: string): Promise<Board | null> {
+    const projectId = await this.findBoardProject(id)
+    if (!projectId) return null
+    return this.readJson<Board | null>(this.boardFile(projectId, id), null)
+  }
+  async createBoard(projectId: string, board: Board): Promise<Board> {
+    await this.writeJson(this.boardFile(projectId, board.id), board)
+    return board
+  }
+  async updateBoard(id: string, patch: Partial<Board>): Promise<Board | null> {
+    const projectId = await this.findBoardProject(id)
+    if (!projectId) return null
+    const current = await this.readJson<Board | null>(this.boardFile(projectId, id), null)
+    if (!current) return null
+    const next = { ...current, ...patch, id }
+    await this.writeJson(this.boardFile(projectId, id), next)
+    return next
+  }
+  async deleteBoard(id: string): Promise<void> {
+    const projectId = await this.findBoardProject(id)
+    if (!projectId) return
+    await fs.rm(this.boardFile(projectId, id), { force: true })
   }
 
   // --- components ---

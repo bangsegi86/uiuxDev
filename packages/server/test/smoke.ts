@@ -81,16 +81,14 @@ async function run() {
   assert.ok(screenId, 'screen node should carry a screenId')
   console.log('✓ create screen file')
 
-  // load the screen document (one default frame)
+  // load the screen (single canvas)
   const screen = await call('GET', `/api/projects/${projectId}/screens/${screenId}`)
   assert.equal(screen.status, 200)
-  assert.equal(screen.body.frames.length, 1)
-  assert.equal(screen.body.frames[0].device, 'mobile')
-  const frameId = screen.body.frames[0].id
-  console.log('✓ load screen document')
+  assert.equal(screen.body.device, 'mobile')
+  console.log('✓ load screen')
 
-  // save a single frame in place (add a button to its root)
-  const root = screen.body.frames[0].root
+  // save the screen design (add a button to its root)
+  const root = screen.body.root
   root.children.push({
     id: 'btn1',
     type: 'button',
@@ -99,30 +97,45 @@ async function run() {
     layout: { x: 40, y: 100, w: 120, h: 40 },
     children: []
   })
-  const savedFrame = await call(
-    'PUT',
-    `/api/projects/${projectId}/screens/${screenId}/frames/${frameId}`,
-    { root }
-  )
-  assert.equal(savedFrame.status, 200)
-  assert.equal(savedFrame.body.root.children.length, 1)
-  console.log('✓ save single frame')
-
-  // save document-level notes + a second frame
-  const root2 = { id: 'root', type: 'container', props: {}, style: {}, layout: { x: 0, y: 0, w: 390, h: 844 }, children: [] }
   const saved = await call('PUT', `/api/projects/${projectId}/screens/${screenId}`, {
-    notes: 'Login flow',
-    frames: [
-      { ...screen.body.frames[0], root },
-      { id: 'f2', name: 'Home', device: 'mobile', canvas: { width: 390, height: 844 }, root: root2, board: { x: 520, y: 80 } }
-    ],
-    connectors: [{ id: 'c1', from: frameId, to: 'f2', label: 'login' }]
+    root,
+    notes: 'Login screen'
   })
   assert.equal(saved.status, 200)
-  assert.equal(saved.body.frames.length, 2)
-  assert.equal(saved.body.connectors.length, 1)
-  assert.equal(saved.body.notes, 'Login flow')
-  console.log('✓ save document (frames + connectors + notes)')
+  assert.equal(saved.body.root.children.length, 1)
+  assert.equal(saved.body.notes, 'Login screen')
+  console.log('✓ save screen design + notes')
+
+  // create a second screen, then a board that links them
+  const screen2Node = await call('POST', `/api/projects/${projectId}/tree`, {
+    type: 'screen',
+    name: 'Home',
+    device: 'mobile'
+  })
+  const screen2Id = screen2Node.body.screenId
+  const boardNode = await call('POST', `/api/projects/${projectId}/tree`, {
+    type: 'board',
+    name: 'User Flow'
+  })
+  assert.equal(boardNode.status, 201)
+  const boardId = boardNode.body.boardId
+  assert.ok(boardId, 'board node should carry a boardId')
+  const board0 = await call('GET', `/api/projects/${projectId}/boards/${boardId}`)
+  assert.equal(board0.status, 200)
+  assert.equal(board0.body.items.length, 0)
+  console.log('✓ create + load board')
+
+  const board = await call('PUT', `/api/projects/${projectId}/boards/${boardId}`, {
+    items: [
+      { screenId, x: 80, y: 80 },
+      { screenId: screen2Id, x: 520, y: 80 }
+    ],
+    connectors: [{ id: 'c1', from: screenId, to: screen2Id, label: 'login' }]
+  })
+  assert.equal(board.status, 200)
+  assert.equal(board.body.items.length, 2)
+  assert.equal(board.body.connectors.length, 1)
+  console.log('✓ save board (placed screens + connectors)')
 
   // save a custom component
   const comp = await call('POST', `/api/projects/${projectId}/components`, {
@@ -145,17 +158,17 @@ async function run() {
   assert.equal(tmpls.body.length, 1)
   console.log('✓ save + list template')
 
-  // reload project with tree
+  // reload project with tree (folder, screen-in-folder, screen2, board)
   const reload = await call('GET', `/api/projects/${projectId}`)
   assert.equal(reload.status, 200)
-  assert.equal(reload.body.tree.length, 2)
+  assert.equal(reload.body.tree.length, 4)
   console.log('✓ reload project tree')
 
-  // delete folder cascades to its screen child
+  // delete folder cascades to its screen child (screen2 + board remain)
   const del = await call('DELETE', `/api/projects/${projectId}/tree/${folder.body.id}`)
   assert.equal(del.status, 204)
   const afterDel = await call('GET', `/api/projects/${projectId}/tree`)
-  assert.equal(afterDel.body.length, 0)
+  assert.equal(afterDel.body.length, 2)
   const goneScreen = await call('GET', `/api/projects/${projectId}/screens/${screenId}`)
   assert.equal(goneScreen.status, 404)
   console.log('✓ delete folder cascades to screen')

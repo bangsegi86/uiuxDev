@@ -2,19 +2,20 @@ import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { nanoid } from 'nanoid'
 import {
   authSchema,
+  boardSaveSchema,
   customComponentSaveSchema,
-  emptyFrame,
-  frameSaveSchema,
+  DEVICE_FRAMES,
+  emptyRoot,
   projectCreateSchema,
   routes,
   screenSaveSchema,
   templateSaveSchema,
   treeNodeCreateSchema,
   treeNodeUpdateSchema,
+  type Board,
   type CustomComponent,
-  type Frame,
   type Project,
-  type ScreenDoc,
+  type Screen,
   type Template,
   type TreeNode
 } from '@uiux/shared'
@@ -141,18 +142,33 @@ export async function registerRoutes(app: FastifyInstance, storage: StorageAdapt
       }
       if (body.type === 'screen') {
         const device = body.device ?? 'pc'
+        const frame = DEVICE_FRAMES[device]
         const ts = now()
-        const doc: ScreenDoc = {
+        const screen: Screen = {
           id: id(),
           name: body.name,
-          frames: [emptyFrame(id(), body.name, device, { x: 80, y: 80 })],
+          device,
+          canvas: { width: frame.width, height: frame.height },
+          root: emptyRoot(device),
+          notes: '',
+          createdAt: ts,
+          updatedAt: ts
+        }
+        await storage.createScreen(projectId, screen)
+        node.screenId = screen.id
+      } else if (body.type === 'board') {
+        const ts = now()
+        const board: Board = {
+          id: id(),
+          name: body.name,
+          items: [],
           connectors: [],
           notes: '',
           createdAt: ts,
           updatedAt: ts
         }
-        await storage.createScreen(projectId, doc)
-        node.screenId = doc.id
+        await storage.createBoard(projectId, board)
+        node.boardId = board.id
       }
       await storage.createTreeNode(node)
       return reply.code(201).send(node)
@@ -196,7 +212,7 @@ export async function registerRoutes(app: FastifyInstance, storage: StorageAdapt
     async (req, reply) => {
       const body = screenSaveSchema.parse(req.body)
       const updated = await storage.updateScreen(req.params.screenId, {
-        ...(body as Partial<ScreenDoc>),
+        ...(body as Partial<Screen>),
         updatedAt: now()
       })
       if (!updated) return reply.code(404).send({ error: 'screen not found' })
@@ -204,21 +220,26 @@ export async function registerRoutes(app: FastifyInstance, storage: StorageAdapt
     }
   )
 
-  // Save a single frame in place (each screen/frame can be saved independently).
-  app.put<{ Params: { projectId: string; screenId: string; frameId: string } }>(
-    '/api/projects/:projectId/screens/:screenId/frames/:frameId',
+  // --- boards (flow diagrams) ---
+  app.get<{ Params: { projectId: string; boardId: string } }>(
+    '/api/projects/:projectId/boards/:boardId',
     async (req, reply) => {
-      const patch = frameSaveSchema.parse(req.body)
-      const doc = await storage.getScreen(req.params.screenId)
-      if (!doc) return reply.code(404).send({ error: 'screen not found' })
-      const idx = doc.frames.findIndex((f) => f.id === req.params.frameId)
-      if (idx < 0) return reply.code(404).send({ error: 'frame not found' })
-      doc.frames[idx] = { ...doc.frames[idx], ...(patch as Partial<Frame>) }
-      const updated = await storage.updateScreen(doc.id, {
-        frames: doc.frames,
+      const board = await storage.getBoard(req.params.boardId)
+      if (!board) return reply.code(404).send({ error: 'board not found' })
+      return board
+    }
+  )
+
+  app.put<{ Params: { projectId: string; boardId: string } }>(
+    '/api/projects/:projectId/boards/:boardId',
+    async (req, reply) => {
+      const body = boardSaveSchema.parse(req.body)
+      const updated = await storage.updateBoard(req.params.boardId, {
+        ...(body as Partial<Board>),
         updatedAt: now()
       })
-      return updated?.frames[idx]
+      if (!updated) return reply.code(404).send({ error: 'board not found' })
+      return updated
     }
   )
 

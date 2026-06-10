@@ -33,7 +33,7 @@ export const projectCreateSchema = z.object({
 
 export const treeNodeCreateSchema = z.object({
   parentId: z.string().nullable().optional(),
-  type: z.enum(['folder', 'screen']),
+  type: z.enum(['folder', 'screen', 'board']),
   name: z.string().min(1).max(200),
   device: deviceKindSchema.optional()
 })
@@ -51,30 +51,27 @@ export const connectorSchema = z.object({
   label: z.string().optional()
 })
 
-export const frameSchema = z.object({
-  id: z.string(),
-  name: z.string().min(1).max(200),
-  device: deviceKindSchema,
-  canvas: z.object({ width: z.number(), height: z.number() }),
-  root: nodeInstanceSchema,
-  board: z.object({ x: z.number(), y: z.number() })
+export const boardItemSchema = z.object({
+  screenId: z.string(),
+  x: z.number(),
+  y: z.number()
 })
 
-/** Save the whole document (frames + connectors + notes). */
+/** Save a single screen design. */
 export const screenSaveSchema = z.object({
-  name: z.string().min(1).max(200).optional(),
-  notes: z.string().optional(),
-  frames: z.array(frameSchema).optional(),
-  connectors: z.array(connectorSchema).optional()
-})
-
-/** Save a single frame in place. */
-export const frameSaveSchema = z.object({
   name: z.string().min(1).max(200).optional(),
   device: deviceKindSchema.optional(),
   canvas: z.object({ width: z.number(), height: z.number() }).optional(),
   root: nodeInstanceSchema.optional(),
-  board: z.object({ x: z.number(), y: z.number() }).optional()
+  notes: z.string().optional()
+})
+
+/** Save a flow board (placed screens + connectors). */
+export const boardSaveSchema = z.object({
+  name: z.string().min(1).max(200).optional(),
+  notes: z.string().optional(),
+  items: z.array(boardItemSchema).optional(),
+  connectors: z.array(connectorSchema).optional()
 })
 
 export const customComponentSaveSchema = z.object({
@@ -95,6 +92,6 @@ export type ProjectCreateInput = z.infer<typeof projectCreateSchema>
 export type TreeNodeCreateInput = z.infer<typeof treeNodeCreateSchema>
 export type TreeNodeUpdateInput = z.infer<typeof treeNodeUpdateSchema>
 export type ScreenSaveInput = z.infer<typeof screenSaveSchema>
-export type FrameSaveInput = z.infer<typeof frameSaveSchema>
+export type BoardSaveInput = z.infer<typeof boardSaveSchema>
 export type CustomComponentSaveInput = z.infer<typeof customComponentSaveSchema>
 export type TemplateSaveInput = z.infer<typeof templateSaveSchema>

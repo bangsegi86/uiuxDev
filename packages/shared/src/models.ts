@@ -52,9 +52,9 @@ export interface Project {
   updatedAt: string
 }
 
-export type TreeNodeType = 'folder' | 'screen'
+export type TreeNodeType = 'folder' | 'screen' | 'board'
 
-/** A node in the project's file-explorer tree (folder or screen file). */
+/** A node in the project's file-explorer tree (folder, screen, or board file). */
 export interface TreeNode {
   id: string
   projectId: string
@@ -63,39 +63,49 @@ export interface TreeNode {
   name: string
   /** Sort order among siblings. */
   order: number
-  /** For `screen` nodes, the id of the backing Screen document. */
+  /** For `screen` nodes, the id of the backing Screen. */
   screenId?: string
+  /** For `board` nodes, the id of the backing Board. */
+  boardId?: string
 }
 
-/** A single screen frame within a document. */
-export interface Frame {
+/** A single screen design (one canvas). Each screen is its own file. */
+export interface Screen {
   id: string
   name: string
   device: DeviceKind
   canvas: { width: number; height: number }
   root: NodeInstance
-  /** Position of this frame on the flow board. */
-  board: { x: number; y: number }
+  /** Free-form design reference notes shown in the collapsible bottom panel. */
+  notes: string
+  createdAt: string
+  updatedAt: string
 }
 
-/** A relationship/flow arrow between two frames on the board. */
+/** A screen placed on a board, with its position. */
+export interface BoardItem {
+  screenId: string
+  x: number
+  y: number
+}
+
+/** A relationship/flow arrow between two screens on a board. */
 export interface Connector {
   id: string
-  from: string // frame id
-  to: string // frame id
+  from: string // screenId
+  to: string // screenId
   label?: string
 }
 
 /**
- * A screen document (the "file"): holds multiple frames and the connectors
- * that express the navigation/flow relationships between them.
+ * A flow board (its own file): references existing screens by id, positions
+ * them, and draws connectors to express the navigation/flow between them.
  */
-export interface ScreenDoc {
+export interface Board {
   id: string
   name: string
-  frames: Frame[]
+  items: BoardItem[]
   connectors: Connector[]
-  /** Free-form design reference notes shown in the collapsible bottom panel. */
   notes: string
   createdAt: string
   updatedAt: string
@@ -122,7 +132,7 @@ export interface Template {
   updatedAt: string
 }
 
-/** Convenience factory for an empty root container of a frame. */
+/** Convenience factory for an empty root container of a screen. */
 export function emptyRoot(device: DeviceKind): NodeInstance {
   const frame = DEVICE_FRAMES[device]
   return {
@@ -132,23 +142,5 @@ export function emptyRoot(device: DeviceKind): NodeInstance {
     style: { background: '#ffffff' },
     layout: { x: 0, y: 0, w: frame.width, h: frame.height },
     children: []
-  }
-}
-
-/** Create a fresh frame for a given device. */
-export function emptyFrame(
-  id: string,
-  name: string,
-  device: DeviceKind,
-  board: { x: number; y: number }
-): Frame {
-  const f = DEVICE_FRAMES[device]
-  return {
-    id,
-    name,
-    device,
-    canvas: { width: f.width, height: f.height },
-    root: emptyRoot(device),
-    board
   }
 }

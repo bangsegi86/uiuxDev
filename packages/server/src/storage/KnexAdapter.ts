@@ -1,8 +1,9 @@
 import type { Knex } from 'knex'
 import type {
+  Board,
   CustomComponent,
   Project,
-  ScreenDoc,
+  Screen,
   Template,
   TreeNode
 } from '@uiux/shared'
@@ -106,23 +107,24 @@ export class KnexAdapter implements StorageAdapter {
   }
 
   // --- screen documents ---
-  async getScreen(id: string): Promise<ScreenDoc | null> {
+  async getScreen(id: string): Promise<Screen | null> {
     const row = await this.db('screens').where({ id }).first()
     if (!row) return null
     return this.rowToScreen(row)
   }
-  async createScreen(projectId: string, screen: ScreenDoc): Promise<ScreenDoc> {
+  async createScreen(projectId: string, screen: Screen): Promise<Screen> {
     await this.db('screens').insert(this.screenToRow(projectId, screen))
     return screen
   }
-  async updateScreen(id: string, patch: Partial<ScreenDoc>): Promise<ScreenDoc | null> {
+  async updateScreen(id: string, patch: Partial<Screen>): Promise<Screen | null> {
     const current = await this.getScreen(id)
     if (!current) return null
     const next = { ...current, ...patch, id }
     const row: Record<string, unknown> = {}
     if (patch.name !== undefined) row.name = next.name
-    if (patch.frames !== undefined) row.frames = JSON.stringify(next.frames)
-    if (patch.connectors !== undefined) row.connectors = JSON.stringify(next.connectors)
+    if (patch.device !== undefined) row.device = next.device
+    if (patch.canvas !== undefined) row.canvas = JSON.stringify(next.canvas)
+    if (patch.root !== undefined) row.root = JSON.stringify(next.root)
     if (patch.notes !== undefined) row.notes = next.notes
     row.updatedAt = next.updatedAt
     await this.db('screens').where({ id }).update(row)
@@ -131,23 +133,75 @@ export class KnexAdapter implements StorageAdapter {
   async deleteScreen(id: string): Promise<void> {
     await this.db('screens').where({ id }).del()
   }
-  private screenToRow(projectId: string, s: ScreenDoc) {
+  private screenToRow(projectId: string, s: Screen) {
     return {
       id: s.id,
       projectId,
       name: s.name,
-      frames: JSON.stringify(s.frames),
-      connectors: JSON.stringify(s.connectors),
+      device: s.device,
+      canvas: JSON.stringify(s.canvas),
+      root: JSON.stringify(s.root),
       notes: s.notes,
       createdAt: s.createdAt,
       updatedAt: s.updatedAt
     }
   }
-  private rowToScreen(row: Record<string, unknown>): ScreenDoc {
+  private rowToScreen(row: Record<string, unknown>): Screen {
     return {
       id: row.id as string,
       name: row.name as string,
-      frames: this.parse(row.frames),
+      device: row.device as Screen['device'],
+      canvas: this.parse(row.canvas),
+      root: this.parse(row.root),
+      notes: (row.notes as string) ?? '',
+      createdAt: row.createdAt as string,
+      updatedAt: row.updatedAt as string
+    }
+  }
+
+  // --- boards ---
+  async getBoard(id: string): Promise<Board | null> {
+    const row = await this.db('boards').where({ id }).first()
+    if (!row) return null
+    return this.rowToBoard(row)
+  }
+  async createBoard(projectId: string, board: Board): Promise<Board> {
+    await this.db('boards').insert(this.boardToRow(projectId, board))
+    return board
+  }
+  async updateBoard(id: string, patch: Partial<Board>): Promise<Board | null> {
+    const current = await this.getBoard(id)
+    if (!current) return null
+    const next = { ...current, ...patch, id }
+    const row: Record<string, unknown> = {}
+    if (patch.name !== undefined) row.name = next.name
+    if (patch.items !== undefined) row.items = JSON.stringify(next.items)
+    if (patch.connectors !== undefined) row.connectors = JSON.stringify(next.connectors)
+    if (patch.notes !== undefined) row.notes = next.notes
+    row.updatedAt = next.updatedAt
+    await this.db('boards').where({ id }).update(row)
+    return next
+  }
+  async deleteBoard(id: string): Promise<void> {
+    await this.db('boards').where({ id }).del()
+  }
+  private boardToRow(projectId: string, b: Board) {
+    return {
+      id: b.id,
+      projectId,
+      name: b.name,
+      items: JSON.stringify(b.items),
+      connectors: JSON.stringify(b.connectors),
+      notes: b.notes,
+      createdAt: b.createdAt,
+      updatedAt: b.updatedAt
+    }
+  }
+  private rowToBoard(row: Record<string, unknown>): Board {
+    return {
+      id: row.id as string,
+      name: row.name as string,
+      items: this.parse(row.items ?? '[]'),
       connectors: this.parse(row.connectors ?? '[]'),
       notes: (row.notes as string) ?? '',
       createdAt: row.createdAt as string,

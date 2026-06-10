@@ -1,7 +1,8 @@
 import type {
+  Board,
   CustomComponent,
   Project,
-  ScreenDoc,
+  Screen,
   Template,
   TreeNode
 } from '@uiux/shared'
@@ -42,11 +43,17 @@ export interface StorageAdapter {
   updateTreeNode(id: string, patch: Partial<TreeNode>): Promise<TreeNode | null>
   deleteTreeNode(id: string): Promise<void>
 
-  // Screen documents
-  getScreen(id: string): Promise<ScreenDoc | null>
-  createScreen(projectId: string, screen: ScreenDoc): Promise<ScreenDoc>
-  updateScreen(id: string, patch: Partial<ScreenDoc>): Promise<ScreenDoc | null>
+  // Screens (one canvas per file)
+  getScreen(id: string): Promise<Screen | null>
+  createScreen(projectId: string, screen: Screen): Promise<Screen>
+  updateScreen(id: string, patch: Partial<Screen>): Promise<Screen | null>
   deleteScreen(id: string): Promise<void>
+
+  // Boards (flow diagrams referencing screens)
+  getBoard(id: string): Promise<Board | null>
+  createBoard(projectId: string, board: Board): Promise<Board>
+  updateBoard(id: string, patch: Partial<Board>): Promise<Board | null>
+  deleteBoard(id: string): Promise<void>
 
   // Custom components
   listComponents(projectId: string): Promise<CustomComponent[]>
