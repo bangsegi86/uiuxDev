@@ -9,6 +9,7 @@ export function PropertyPanel() {
   const updateProp = useEditor((s) => s.updateProp)
   const updateStyle = useEditor((s) => s.updateStyle)
   const updateLayout = useEditor((s) => s.updateLayout)
+  const checkpoint = useEditor((s) => s.checkpoint)
 
   if (!screen || selection.length === 0) {
     return (
@@ -88,7 +89,7 @@ export function PropertyPanel() {
   const num = (v: number) => Math.round(v)
 
   return (
-    <aside className="panel right-panel">
+    <aside className="panel right-panel" onFocusCapture={checkpoint}>
       <div className="panel-title">
         {t.properties} · {def?.label ?? node.type}
       </div>

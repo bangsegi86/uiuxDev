@@ -27,6 +27,7 @@ export function Canvas() {
   const updateLayout = useEditor((s) => s.updateLayout)
   const insertPrimitive = useEditor((s) => s.insertPrimitive)
   const insertDefinition = useEditor((s) => s.insertDefinition)
+  const checkpoint = useEditor((s) => s.checkpoint)
 
   const frameRef = useRef<HTMLDivElement>(null)
   const [it, setIt] = useState<Interaction>({ mode: 'idle' })
@@ -55,6 +56,7 @@ export function Canvas() {
     const { x, y } = toCanvas(e.clientX, e.clientY)
     const origin: Record<string, Layout> = {}
     for (const c of screen.root.children) if (sel.includes(c.id)) origin[c.id] = { ...c.layout }
+    checkpoint()
     setIt({ mode: 'move', startX: x, startY: y, origin })
     ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
   }
@@ -63,6 +65,7 @@ export function Canvas() {
     e.stopPropagation()
     setSelection([node.id])
     const { x, y } = toCanvas(e.clientX, e.clientY)
+    checkpoint()
     setIt({ mode: 'resize', id: node.id, handle, startX: x, startY: y, origin: { ...node.layout } })
     ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
   }

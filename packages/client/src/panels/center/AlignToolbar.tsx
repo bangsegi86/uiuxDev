@@ -24,6 +24,10 @@ export function AlignToolbar() {
   const paste = useEditor((s) => s.paste)
   const duplicate = useEditor((s) => s.duplicate)
   const remove = useEditor((s) => s.remove)
+  const undo = useEditor((s) => s.undo)
+  const redo = useEditor((s) => s.redo)
+  const canUndo = useEditor((s) => s.past.length > 0)
+  const canRedo = useEditor((s) => s.future.length > 0)
 
   const alignDisabled = selection.length < 2
   const distDisabled = selection.length < 3
@@ -31,6 +35,13 @@ export function AlignToolbar() {
 
   return (
     <div className="toolbar align-toolbar">
+      <button title={t.undo} disabled={!canUndo} onClick={undo}>
+        ↶
+      </button>
+      <button title={t.redo} disabled={!canRedo} onClick={redo}>
+        ↷
+      </button>
+      <span className="divider-v" />
       <span className="label">{t.align}</span>
       {ALIGN_BUTTONS.map((b) => (
         <button key={b.kind} title={t[b.key]} disabled={alignDisabled} onClick={() => align(b.kind)}>

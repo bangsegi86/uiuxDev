@@ -40,6 +40,10 @@ interface EditorState {
   dirty: boolean
   notesOpen: boolean
 
+  // history (undo/redo) — snapshots of the whole screen
+  past: Screen[]
+  future: Screen[]
+
   // workspace actions
   loadProjects: () => Promise<Project[]>
   openProject: (id: string) => Promise<void>
@@ -54,6 +58,11 @@ interface EditorState {
   renameNode: (nodeId: string, name: string) => Promise<void>
   deleteNode: (nodeId: string) => Promise<void>
   openScreen: (screenId: string) => Promise<void>
+
+  // history actions
+  checkpoint: () => void
+  undo: () => void
+  redo: () => void
 
   // canvas actions
   setSelection: (ids: string[]) => void
@@ -109,6 +118,31 @@ export const useEditor = create<EditorState>((set, get) => ({
   saving: false,
   dirty: false,
   notesOpen: true,
+  past: [],
+  future: [],
+
+  // Snapshot the current screen before an edit gesture so it can be undone.
+  // Consecutive calls with no intervening change are de-duplicated by reference.
+  checkpoint: () => {
+    const { screen, past } = get()
+    if (!screen) return
+    if (past[past.length - 1] === screen) return
+    set({ past: [...past, screen].slice(-50), future: [] })
+  },
+
+  undo: () => {
+    const { past, future, screen } = get()
+    if (!past.length || !screen) return
+    const prev = past[past.length - 1]
+    set({ screen: prev, past: past.slice(0, -1), future: [screen, ...future], selection: [], dirty: true })
+  },
+
+  redo: () => {
+    const { past, future, screen } = get()
+    if (!future.length || !screen) return
+    const next = future[0]
+    set({ screen: next, future: future.slice(1), past: [...past, screen], selection: [], dirty: true })
+  },
 
   loadProjects: async () => api.listProjects(),
 
@@ -171,7 +205,7 @@ export const useEditor = create<EditorState>((set, get) => ({
     const { projectId } = get()
     if (!projectId) return
     const screen = await api.getScreen(projectId, screenId)
-    set({ screen, selection: [], dirty: false })
+    set({ screen, selection: [], dirty: false, past: [], future: [] })
   },
 
   setSelection: (ids) => set({ selection: ids }),
@@ -185,6 +219,7 @@ export const useEditor = create<EditorState>((set, get) => ({
   insertPrimitive: (type, at) => {
     const { screen } = get()
     if (!screen) return
+    get().checkpoint()
     const inst = createInstance(type, nanoid(10), at)
     set({
       screen: { ...screen, root: { ...screen.root, children: [...screen.root.children, inst] } },
@@ -196,6 +231,7 @@ export const useEditor = create<EditorState>((set, get) => ({
   insertDefinition: (def, at) => {
     const { screen } = get()
     if (!screen) return
+    get().checkpoint()
     const instances = expandDefinition(def, at)
     set({
       screen: {
@@ -271,6 +307,7 @@ export const useEditor = create<EditorState>((set, get) => ({
   paste: () => {
     const { screen, clipboard } = get()
     if (!screen || !clipboard?.length) return
+    get().checkpoint()
     const clones = clipboard.map((c) => {
       const copy = cloneWithNewIds(c)
       return { ...copy, layout: { ...copy.layout, x: copy.layout.x + 24, y: copy.layout.y + 24 } }
@@ -290,6 +327,7 @@ export const useEditor = create<EditorState>((set, get) => ({
   remove: () => {
     const { screen, selection } = get()
     if (!screen || !selection.length) return
+    get().checkpoint()
     set({
       screen: {
         ...screen,
@@ -306,6 +344,7 @@ export const useEditor = create<EditorState>((set, get) => ({
   align: (kind) => {
     const { screen, selection } = get()
     if (!screen || selection.length < 2) return
+    get().checkpoint()
     const items = screen.root.children.filter((c) => selection.includes(c.id))
     const box = boundingBox(items)
     const move = (n: NodeInstance): NodeInstance => {
@@ -347,6 +386,7 @@ export const useEditor = create<EditorState>((set, get) => ({
   distribute: (kind) => {
     const { screen, selection } = get()
     if (!screen || selection.length < 3) return
+    get().checkpoint()
     const items = screen.root.children
       .filter((c) => selection.includes(c.id))
       .sort((a, b) => (kind === 'horizontal' ? a.layout.x - b.layout.x : a.layout.y - b.layout.y))
@@ -379,6 +419,7 @@ export const useEditor = create<EditorState>((set, get) => ({
   setDevice: (device) => {
     const { screen } = get()
     if (!screen) return
+    get().checkpoint()
     const frame = DEVICE_FRAMES[device]
     set({
       screen: {
@@ -425,6 +466,7 @@ export const useEditor = create<EditorState>((set, get) => ({
   applyTemplate: (template) => {
     const { screen } = get()
     if (!screen) return
+    get().checkpoint()
     const children = template.definition.children.map(cloneWithNewIds)
     set({
       screen: { ...screen, root: { ...screen.root, children } },

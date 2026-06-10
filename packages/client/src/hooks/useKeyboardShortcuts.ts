@@ -14,7 +14,13 @@ export function useKeyboardShortcuts() {
       const s = useEditor.getState()
       const mod = e.ctrlKey || e.metaKey
 
-      if (mod && e.key.toLowerCase() === 'c') {
+      if (mod && e.key.toLowerCase() === 'z' && !e.shiftKey) {
+        s.undo()
+        e.preventDefault()
+      } else if ((mod && e.key.toLowerCase() === 'z' && e.shiftKey) || (mod && e.key.toLowerCase() === 'y')) {
+        s.redo()
+        e.preventDefault()
+      } else if (mod && e.key.toLowerCase() === 'c') {
         s.copy()
         e.preventDefault()
       } else if (mod && e.key.toLowerCase() === 'v') {

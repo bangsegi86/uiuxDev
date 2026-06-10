@@ -8,6 +8,7 @@ export function NotesPanel() {
   const notesOpen = useEditor((s) => s.notesOpen)
   const toggleNotes = useEditor((s) => s.toggleNotes)
   const setNotes = useEditor((s) => s.setNotes)
+  const checkpoint = useEditor((s) => s.checkpoint)
 
   return (
     <div className={`notes-panel${notesOpen ? ' open' : ' collapsed'}`}>
@@ -21,6 +22,7 @@ export function NotesPanel() {
           placeholder={t.notes}
           value={screen?.notes ?? ''}
           disabled={!screen}
+          onFocus={checkpoint}
           onChange={(e) => setNotes(e.target.value)}
         />
       )}
