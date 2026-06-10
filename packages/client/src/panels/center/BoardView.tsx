@@ -3,6 +3,7 @@ import type { Board, BoardItem, Screen } from '@uiux/shared'
 import { useEditor } from '../../state/editorStore'
 import { useI18n } from '../../i18n/I18nContext'
 import { renderStaticTree } from '../../componentRegistry'
+import { AddScreenModal } from './AddScreenModal'
 
 const SCALE = 0.26
 
@@ -10,6 +11,12 @@ type Drag =
   | { mode: 'none' }
   | { mode: 'item'; screenId: string; offX: number; offY: number }
   | { mode: 'connect'; from: string; x: number; y: number }
+
+interface Ctx {
+  x: number
+  y: number
+  screenId: string
+}
 
 function itemBox(item: BoardItem, screen: Screen | undefined) {
   const w = (screen?.canvas.width ?? 390) * SCALE
@@ -21,21 +28,24 @@ function itemBox(item: BoardItem, screen: Screen | undefined) {
 export function BoardView({ board }: { board: Board }) {
   const { t } = useI18n()
   const screens = useEditor((s) => s.screens)
-  const tree = useEditor((s) => s.tree)
   const dirty = useEditor((s) => Boolean(s.dirty[board.id]))
   const saving = useEditor((s) => s.saving)
   const moveBoardItem = useEditor((s) => s.moveBoardItem)
   const addConnector = useEditor((s) => s.addConnector)
   const deleteConnector = useEditor((s) => s.deleteConnector)
-  const addScreenToBoard = useEditor((s) => s.addScreenToBoard)
   const removeScreenFromBoard = useEditor((s) => s.removeScreenFromBoard)
   const openScreen = useEditor((s) => s.openScreen)
   const saveActive = useEditor((s) => s.saveActive)
+  const renameDoc = useEditor((s) => s.renameDoc)
   const boardRef = useRef<HTMLDivElement>(null)
   const [drag, setDrag] = useState<Drag>({ mode: 'none' })
+  const [ctx, setCtx] = useState<Ctx | null>(null)
+  const [addOpen, setAddOpen] = useState(false)
 
-  const onBoard = board.items.map((i) => i.screenId)
-  const available = tree.filter((n) => n.type === 'screen' && n.screenId && !onBoard.includes(n.screenId))
+  const onRenameBoard = () => {
+    const name = window.prompt(t.rename, board.name)
+    if (name && name.trim()) void renameDoc({ kind: 'board', id: board.id }, name)
+  }
 
   const toBoard = (clientX: number, clientY: number) => {
     const el = boardRef.current!
@@ -83,22 +93,11 @@ export function BoardView({ board }: { board: Board }) {
   return (
     <>
       <div className="toolbar">
-        <strong className="screen-name">🗺 {board.name}</strong>
+        <strong className="screen-name" title={t.rename} onDoubleClick={onRenameBoard}>
+          🗺 {board.name}
+        </strong>
         <span className="divider-v" />
-        <label className="label">{t.addScreenToBoard}</label>
-        <select
-          value=""
-          onChange={(e) => {
-            if (e.target.value) void addScreenToBoard(board.id, e.target.value)
-          }}
-        >
-          <option value="">{available.length ? '—' : t.noScreensLeft}</option>
-          {available.map((n) => (
-            <option key={n.id} value={n.screenId}>
-              {n.name}
-            </option>
-          ))}
-        </select>
+        <button onClick={() => setAddOpen(true)}>＋ {t.addScreenToBoard}</button>
         <span className="spacer" />
         <button className="primary" onClick={() => void saveActive()} disabled={saving}>
           {saving ? '…' : t.save}
@@ -106,8 +105,16 @@ export function BoardView({ board }: { board: Board }) {
         <span className={`dirty-dot ${dirty ? 'on' : 'off'}`}>{dirty ? t.unsaved : t.saved}</span>
       </div>
 
+      {addOpen && <AddScreenModal boardId={board.id} onClose={() => setAddOpen(false)} />}
+
       <div className="board-scroll">
-        <div ref={boardRef} className="board" onPointerMove={onMove} onPointerUp={onUp}>
+        <div
+          ref={boardRef}
+          className="board"
+          onPointerMove={onMove}
+          onPointerUp={onUp}
+          onPointerDown={() => setCtx(null)}
+        >
           <svg className="board-svg">
             <defs>
               <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
@@ -159,7 +166,11 @@ export function BoardView({ board }: { board: Board }) {
                 className="board-frame"
                 style={{ left: b.x, top: b.y, width: b.w }}
                 onPointerDown={(e) => onItemDown(e, item)}
-                onDoubleClick={() => void openScreen(item.screenId)}
+                onContextMenu={(e) => {
+                  e.preventDefault()
+                  const p = toBoard(e.clientX, e.clientY)
+                  setCtx({ x: p.x, y: p.y, screenId: item.screenId })
+                }}
               >
                 <div className="board-frame-head">
                   <span className="frame-tab-device">{screen?.device === 'pc' ? '🖥' : '📱'}</span>
@@ -196,6 +207,27 @@ export function BoardView({ board }: { board: Board }) {
               </div>
             )
           })}
+
+          {ctx && (
+            <div className="board-context" style={{ left: ctx.x, top: ctx.y }} onPointerDown={(e) => e.stopPropagation()}>
+              <button
+                onClick={() => {
+                  void openScreen(ctx.screenId)
+                  setCtx(null)
+                }}
+              >
+                {t.openInEditor}
+              </button>
+              <button
+                onClick={() => {
+                  removeScreenFromBoard(board.id, ctx.screenId)
+                  setCtx(null)
+                }}
+              >
+                {t.removeFromBoard}
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </>

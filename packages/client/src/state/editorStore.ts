@@ -84,6 +84,7 @@ interface EditorState {
   refreshTree: () => Promise<void>
   createNode: (type: 'folder' | 'screen' | 'board', name: string, parentId: string | null, device?: DeviceKind) => Promise<void>
   renameNode: (nodeId: string, name: string) => Promise<void>
+  renameDoc: (tab: Tab, name: string) => Promise<void>
   deleteNode: (nodeId: string) => Promise<void>
 
   // --- tabs ---
@@ -273,10 +274,32 @@ export const useEditor = create<EditorState>((set, get) => ({
   },
 
   renameNode: async (nodeId, name) => {
-    const { projectId } = get()
+    const { projectId, tree } = get()
     if (!projectId) return
+    const node = tree.find((n) => n.id === nodeId)
     await api.updateTreeNode(projectId, nodeId, { name })
+    // Keep the backing screen/board record (and any open tab) in sync.
+    if (node?.type === 'screen' && node.screenId) {
+      await api.saveScreen(projectId, node.screenId, { name })
+      set((s) => {
+        const sc = s.screens[node.screenId!]
+        return sc ? { screens: { ...s.screens, [sc.id]: { ...sc, name } } } : {}
+      })
+    } else if (node?.type === 'board' && node.boardId) {
+      await api.saveBoard(projectId, node.boardId, { name })
+      set((s) => {
+        const bd = s.boards[node.boardId!]
+        return bd ? { boards: { ...s.boards, [bd.id]: { ...bd, name } } } : {}
+      })
+    }
     await get().refreshTree()
+  },
+
+  renameDoc: async (tab, name) => {
+    const node = get().tree.find((n) =>
+      tab.kind === 'screen' ? n.screenId === tab.id : n.boardId === tab.id
+    )
+    if (node) await get().renameNode(node.id, name.trim())
   },
 
   deleteNode: async (nodeId) => {

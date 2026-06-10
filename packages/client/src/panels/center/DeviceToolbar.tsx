@@ -14,12 +14,20 @@ export function DeviceToolbar() {
   const saving = useEditor((s) => s.saving)
   const dirty = useEditor((s) => (activeTab ? Boolean(s.dirty[activeTab.id]) : false))
   const saveActive = useEditor((s) => s.saveActive)
+  const renameDoc = useEditor((s) => s.renameDoc)
 
   if (!screen || !surface) return null
 
+  const onRename = () => {
+    const name = window.prompt(t.rename, screen.name)
+    if (name && name.trim() && activeTab) void renameDoc(activeTab, name)
+  }
+
   return (
     <div className="toolbar">
-      <strong className="screen-name">{screen.name}</strong>
+      <strong className="screen-name" title={t.rename} onDoubleClick={onRename}>
+        {screen.name}
+      </strong>
       <span className="divider-v" />
       <span className="label">{t.device}</span>
       <div className="segmented">

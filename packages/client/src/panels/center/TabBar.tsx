@@ -1,7 +1,9 @@
 import { useEditor, type Tab } from '../../state/editorStore'
+import { useI18n } from '../../i18n/I18nContext'
 
 /** IDE-style tab bar for the open screens and boards. */
 export function TabBar() {
+  const { t } = useI18n()
   const openTabs = useEditor((s) => s.openTabs)
   const activeTab = useEditor((s) => s.activeTab)
   const screens = useEditor((s) => s.screens)
@@ -9,6 +11,12 @@ export function TabBar() {
   const dirty = useEditor((s) => s.dirty)
   const setActiveTab = useEditor((s) => s.setActiveTab)
   const closeTab = useEditor((s) => s.closeTab)
+  const renameDoc = useEditor((s) => s.renameDoc)
+
+  const onRename = (tab: Tab, current: string) => {
+    const name = window.prompt(t.rename, current)
+    if (name && name.trim()) void renameDoc(tab, name)
+  }
 
   if (openTabs.length === 0) return null
 
@@ -24,6 +32,7 @@ export function TabBar() {
           key={`${tab.kind}:${tab.id}`}
           className={`doc-tab${isActive(tab) ? ' active' : ''}`}
           onClick={() => setActiveTab(tab)}
+          onDoubleClick={() => onRename(tab, nameOf(tab))}
           title={nameOf(tab)}
         >
           <span className="doc-tab-icon">{tab.kind === 'board' ? '🗺' : '🖼'}</span>
