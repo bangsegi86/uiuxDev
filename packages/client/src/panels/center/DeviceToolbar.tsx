@@ -1,9 +1,11 @@
 import { useEditor } from '../../state/editorStore'
 import { useI18n } from '../../i18n/I18nContext'
+import { downloadScreenHtml } from '../../lib/htmlExport'
 
 export function DeviceToolbar() {
   const { t } = useI18n()
   const screen = useEditor((s) => s.screen)
+  const components = useEditor((s) => s.components)
   const setDevice = useEditor((s) => s.setDevice)
   const zoom = useEditor((s) => s.zoom)
   const setZoom = useEditor((s) => s.setZoom)
@@ -41,6 +43,7 @@ export function DeviceToolbar() {
       />
       <span className="zoom-value">{Math.round(zoom * 100)}%</span>
       <span className="spacer" />
+      <button onClick={() => downloadScreenHtml(screen, components)}>{t.exportHtml}</button>
       <button className="primary" onClick={() => void saveScreen()} disabled={saving}>
         {saving ? '…' : t.save}
       </button>
