@@ -6,7 +6,7 @@ import type {
   Template,
   TreeNode
 } from '@uiux/shared'
-import type { StorageAdapter } from './StorageAdapter.js'
+import type { StorageAdapter, StoredUser } from './StorageAdapter.js'
 
 /**
  * SQL-backed adapter (PostgreSQL or Oracle) using Knex. Definitions and other
@@ -28,6 +28,21 @@ export class KnexAdapter implements StorageAdapter {
 
   private parse<T>(value: unknown): T {
     return typeof value === 'string' ? (JSON.parse(value) as T) : (value as T)
+  }
+
+  // --- users ---
+  async createUser(user: StoredUser): Promise<StoredUser> {
+    await this.db('users').insert(user)
+    return user
+  }
+  async getUserByEmail(email: string): Promise<StoredUser | null> {
+    return (
+      (await this.db<StoredUser>('users').whereRaw('LOWER(email) = ?', [email.toLowerCase()]).first()) ??
+      null
+    )
+  }
+  async getUserById(id: string): Promise<StoredUser | null> {
+    return (await this.db<StoredUser>('users').where({ id }).first()) ?? null
   }
 
   // --- projects ---

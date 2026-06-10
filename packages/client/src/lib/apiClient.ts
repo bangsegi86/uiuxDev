@@ -1,18 +1,34 @@
 import {
   routes,
+  type AuthResponse,
   type CustomComponent,
   type DeviceKind,
   type NodeInstance,
   type Project,
   type Screen,
   type Template,
-  type TreeNode
+  type TreeNode,
+  type User
 } from '@uiux/shared'
 
+const TOKEN_KEY = 'uiux_token'
+
+export function getToken(): string | null {
+  return localStorage.getItem(TOKEN_KEY)
+}
+export function setToken(token: string | null) {
+  if (token) localStorage.setItem(TOKEN_KEY, token)
+  else localStorage.removeItem(TOKEN_KEY)
+}
+
 async function http<T>(method: string, url: string, body?: unknown): Promise<T> {
+  const headers: Record<string, string> = {}
+  if (body) headers['Content-Type'] = 'application/json'
+  const token = getToken()
+  if (token) headers['Authorization'] = `Bearer ${token}`
   const res = await fetch(url, {
     method,
-    headers: body ? { 'Content-Type': 'application/json' } : undefined,
+    headers,
     body: body ? JSON.stringify(body) : undefined
   })
   if (!res.ok) {
@@ -24,6 +40,12 @@ async function http<T>(method: string, url: string, body?: unknown): Promise<T> 
 }
 
 export const api = {
+  register: (email: string, password: string) =>
+    http<AuthResponse>('POST', routes.register, { email, password }),
+  login: (email: string, password: string) =>
+    http<AuthResponse>('POST', routes.login, { email, password }),
+  me: () => http<User>('GET', routes.me),
+
   listProjects: () => http<Project[]>('GET', routes.projects),
   createProject: (name: string) => http<Project>('POST', routes.projects, { name }),
   getProject: (id: string) => http<{ project: Project; tree: TreeNode[] }>('GET', routes.project(id)),

@@ -1,9 +1,12 @@
 /** Shared REST route constants and response DTO shapes. */
-import type { CustomComponent, Project, Screen, Template, TreeNode } from './models.js'
+import type { CustomComponent, Project, Screen, Template, TreeNode, User } from './models.js'
 
 export const API_BASE = '/api'
 
 export const routes = {
+  register: '/api/auth/register',
+  login: '/api/auth/login',
+  me: '/api/auth/me',
   projects: '/api/projects',
   project: (id: string) => `/api/projects/${id}`,
   tree: (projectId: string) => `/api/projects/${projectId}/tree`,
@@ -13,7 +16,8 @@ export const routes = {
   component: (projectId: string, id: string) => `/api/projects/${projectId}/components/${id}`,
   templates: (projectId: string) => `/api/projects/${projectId}/templates`,
   template: (projectId: string, id: string) => `/api/projects/${projectId}/templates/${id}`,
-  health: '/api/health'
+  health: '/api/health',
+  ws: '/api/ws'
 } as const
 
 export interface ProjectWithTree {
@@ -26,4 +30,18 @@ export interface HealthResponse {
   storage: string
 }
 
-export type { Project, TreeNode, Screen, CustomComponent, Template }
+export interface AuthResponse {
+  token: string
+  user: User
+}
+
+/** Realtime collaboration websocket message protocol. */
+export type CollabMessage =
+  | { type: 'presence'; users: { id: string; email: string }[] }
+  | { type: 'update'; root: NodeInstanceLike; from: string }
+  | { type: 'hello'; screenId: string }
+
+/** Loose alias so the protocol type doesn't pull in the full model here. */
+export type NodeInstanceLike = unknown
+
+export type { Project, TreeNode, Screen, CustomComponent, Template, User }

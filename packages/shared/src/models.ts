@@ -35,10 +35,19 @@ export interface NodeInstance {
   children: NodeInstance[]
 }
 
-/** A project groups a tree of folders and screens. */
+/** An application user (account). */
+export interface User {
+  id: string
+  email: string
+  createdAt: string
+}
+
+/** A project groups a tree of folders and screens. Owned by a user. */
 export interface Project {
   id: string
   name: string
+  /** Owner user id. Optional for legacy data created before auth. */
+  ownerId?: string
   createdAt: string
   updatedAt: string
 }

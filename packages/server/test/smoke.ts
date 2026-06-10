@@ -20,8 +20,14 @@ async function run() {
   const storage = await createStorage()
   await registerRoutes(app, storage)
 
+  let token = ''
   const call = async (method: string, url: string, body?: unknown) => {
-    const res = await app.inject({ method: method as 'GET', url, payload: body as object })
+    const res = await app.inject({
+      method: method as 'GET',
+      url,
+      payload: body as object,
+      headers: token ? { authorization: `Bearer ${token}` } : undefined
+    })
     return { status: res.statusCode, body: res.body ? JSON.parse(res.body) : null }
   }
 
@@ -30,6 +36,24 @@ async function run() {
   assert.equal(health.status, 200)
   assert.equal(health.body.ok, true)
   console.log(`✓ health (storage=${health.body.storage})`)
+
+  // auth: register + token
+  const reg = await call('POST', '/api/auth/register', {
+    email: `u${Date.now()}@test.dev`,
+    password: 'secret123'
+  })
+  assert.equal(reg.status, 201)
+  assert.ok(reg.body.token)
+  token = reg.body.token
+  console.log('✓ register + token')
+
+  // unauthenticated access is rejected
+  const savedToken = token
+  token = ''
+  const noAuth = await call('GET', '/api/projects')
+  assert.equal(noAuth.status, 401)
+  token = savedToken
+  console.log('✓ auth guard rejects missing token')
 
   // create project
   const proj = await call('POST', '/api/projects', { name: 'Demo Project' })

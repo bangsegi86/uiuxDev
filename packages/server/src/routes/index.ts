@@ -1,6 +1,7 @@
-import type { FastifyInstance } from 'fastify'
+import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { nanoid } from 'nanoid'
 import {
+  authSchema,
   customComponentSaveSchema,
   DEVICE_FRAMES,
   emptyRoot,
@@ -16,22 +17,82 @@ import {
   type Template,
   type TreeNode
 } from '@uiux/shared'
+import { hashPassword, signToken, userFromAuthHeader, verifyPassword } from '../auth.js'
 import type { StorageAdapter } from '../storage/index.js'
 
 const now = () => new Date().toISOString()
 const id = () => nanoid(12)
 
+/** Read the authenticated user id attached by the project-routes guard. */
+const uid = (req: FastifyRequest): string => (req as { userId?: string }).userId ?? ''
+
 /** Register every REST resource. */
 export async function registerRoutes(app: FastifyInstance, storage: StorageAdapter) {
   app.get(routes.health, async () => ({ ok: true, storage: storage.name }))
 
+  // --- auth (public) ---
+  app.post(routes.register, async (req, reply) => {
+    const { email, password } = authSchema.parse(req.body)
+    if (await storage.getUserByEmail(email)) {
+      return reply.code(409).send({ error: 'email already registered' })
+    }
+    const user = await storage.createUser({
+      id: id(),
+      email,
+      passwordHash: hashPassword(password),
+      createdAt: now()
+    })
+    const pub = { id: user.id, email: user.email, createdAt: user.createdAt }
+    return reply.code(201).send({ token: signToken(user), user: pub })
+  })
+
+  app.post(routes.login, async (req, reply) => {
+    const { email, password } = authSchema.parse(req.body)
+    const user = await storage.getUserByEmail(email)
+    if (!user || !verifyPassword(password, user.passwordHash)) {
+      return reply.code(401).send({ error: 'invalid credentials' })
+    }
+    const pub = { id: user.id, email: user.email, createdAt: user.createdAt }
+    return { token: signToken(user), user: pub }
+  })
+
+  app.get(routes.me, async (req, reply) => {
+    const payload = userFromAuthHeader(req.headers.authorization)
+    if (!payload) return reply.code(401).send({ error: 'unauthorized' })
+    const user = await storage.getUserById(payload.sub)
+    if (!user) return reply.code(401).send({ error: 'unauthorized' })
+    return { id: user.id, email: user.email, createdAt: user.createdAt }
+  })
+
+  // --- auth guard for all project-scoped routes ---
+  app.addHook('preHandler', async (req, reply) => {
+    if (!req.url.startsWith('/api/projects')) return
+    const payload = userFromAuthHeader(req.headers.authorization)
+    if (!payload) return reply.code(401).send({ error: 'unauthorized' })
+    ;(req as { userId?: string }).userId = payload.sub
+    // When a specific project is addressed, enforce ownership.
+    const m = /^\/api\/projects\/([^/?]+)/.exec(req.url)
+    if (m) {
+      const project = await storage.getProject(decodeURIComponent(m[1]))
+      if (!project) return reply.code(404).send({ error: 'project not found' })
+      if (project.ownerId && project.ownerId !== payload.sub) {
+        return reply.code(403).send({ error: 'forbidden' })
+      }
+    }
+  })
+
   // --- projects ---
-  app.get(routes.projects, async () => storage.listProjects())
+  app.get(routes.projects, async (req) => {
+    const userId = uid(req)
+    const all = await storage.listProjects()
+    // Show the user's own projects (and legacy ones without an owner).
+    return all.filter((p) => !p.ownerId || p.ownerId === userId)
+  })
 
   app.post(routes.projects, async (req, reply) => {
     const body = projectCreateSchema.parse(req.body)
     const ts = now()
-    const project: Project = { id: id(), name: body.name, createdAt: ts, updatedAt: ts }
+    const project: Project = { id: id(), name: body.name, ownerId: uid(req), createdAt: ts, updatedAt: ts }
     await storage.createProject(project)
     return reply.code(201).send(project)
   })

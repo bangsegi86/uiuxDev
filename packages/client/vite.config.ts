@@ -9,7 +9,8 @@ export default defineConfig({
       // Forward API calls to the Fastify server during development.
       '/api': {
         target: process.env.API_TARGET ?? 'http://localhost:4000',
-        changeOrigin: true
+        changeOrigin: true,
+        ws: true
       }
     }
   }

@@ -53,7 +53,15 @@ export const ko = {
   promptComponentName: '컴포넌트 이름',
   promptTemplateName: '템플릿 이름',
   confirmDelete: '삭제하시겠습니까?',
-  language: '언어'
+  language: '언어',
+  login: '로그인',
+  register: '회원가입',
+  logout: '로그아웃',
+  email: '이메일',
+  password: '비밀번호',
+  loginFailed: '로그인 실패. 이메일/비밀번호를 확인하세요.',
+  registerFailed: '회원가입 실패. 이미 등록된 이메일일 수 있습니다.',
+  editing: '명 편집 중'
 }
 
 export type Strings = typeof ko
@@ -112,7 +120,15 @@ export const en: Strings = {
   promptComponentName: 'Component name',
   promptTemplateName: 'Template name',
   confirmDelete: 'Delete?',
-  language: 'Language'
+  language: 'Language',
+  login: 'Log in',
+  register: 'Sign up',
+  logout: 'Log out',
+  email: 'Email',
+  password: 'Password',
+  loginFailed: 'Login failed. Check your email/password.',
+  registerFailed: 'Sign up failed. The email may already be registered.',
+  editing: 'editing'
 }
 
 export const dictionaries = { ko, en }

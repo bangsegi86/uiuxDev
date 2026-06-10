@@ -51,6 +51,11 @@ interface EditorState {
   past: Screen[]
   future: Screen[]
 
+  // collaboration
+  collaborators: { id: string; email: string }[]
+  setCollaborators: (c: { id: string; email: string }[]) => void
+  applyRemoteRoot: (root: NodeInstance) => void
+
   // workspace actions
   loadProjects: () => Promise<Project[]>
   openProject: (id: string) => Promise<void>
@@ -121,6 +126,16 @@ export const useEditor = create<EditorState>((set, get) => ({
   notesOpen: true,
   past: [],
   future: [],
+  collaborators: [],
+
+  setCollaborators: (c) => set({ collaborators: c }),
+
+  // Apply a screen-tree update received from a collaborator (no history entry).
+  applyRemoteRoot: (root) => {
+    const { screen } = get()
+    if (!screen) return
+    set({ screen: { ...screen, root }, dirty: true })
+  },
 
   // Snapshot the current screen before an edit gesture so it can be undone.
   // Consecutive calls with no intervening change are de-duplicated by reference.

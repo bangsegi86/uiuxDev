@@ -22,6 +22,11 @@ export const nodeInstanceSchema: z.ZodType<unknown> = z.lazy(() =>
   })
 )
 
+export const authSchema = z.object({
+  email: z.string().email().max(200),
+  password: z.string().min(6).max(200)
+})
+
 export const projectCreateSchema = z.object({
   name: z.string().min(1).max(200)
 })
@@ -60,6 +65,7 @@ export const templateSaveSchema = z.object({
   definition: nodeInstanceSchema
 })
 
+export type AuthInput = z.infer<typeof authSchema>
 export type ProjectCreateInput = z.infer<typeof projectCreateSchema>
 export type TreeNodeCreateInput = z.infer<typeof treeNodeCreateSchema>
 export type TreeNodeUpdateInput = z.infer<typeof treeNodeUpdateSchema>

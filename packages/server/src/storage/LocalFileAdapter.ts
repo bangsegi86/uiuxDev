@@ -7,7 +7,7 @@ import type {
   Template,
   TreeNode
 } from '@uiux/shared'
-import type { StorageAdapter } from './StorageAdapter.js'
+import type { StorageAdapter, StoredUser } from './StorageAdapter.js'
 
 /**
  * Default adapter. Persists everything as JSON under a data directory:
@@ -33,9 +33,13 @@ export class LocalFileAdapter implements StorageAdapter {
   async init(): Promise<void> {
     await fs.mkdir(this.root, { recursive: true })
     await this.ensureFile(this.projectsFile(), [])
+    await this.ensureFile(this.usersFile(), [])
   }
 
   // --- path helpers ---
+  private usersFile() {
+    return path.join(this.root, 'users.json')
+  }
   private projectsFile() {
     return path.join(this.root, 'projects.json')
   }
@@ -92,6 +96,22 @@ export class LocalFileAdapter implements StorageAdapter {
       }
     }
     return null
+  }
+
+  // --- users ---
+  async createUser(user: StoredUser): Promise<StoredUser> {
+    const users = await this.readJson<StoredUser[]>(this.usersFile(), [])
+    users.push(user)
+    await this.writeJson(this.usersFile(), users)
+    return user
+  }
+  async getUserByEmail(email: string): Promise<StoredUser | null> {
+    const users = await this.readJson<StoredUser[]>(this.usersFile(), [])
+    return users.find((u) => u.email.toLowerCase() === email.toLowerCase()) ?? null
+  }
+  async getUserById(id: string): Promise<StoredUser | null> {
+    const users = await this.readJson<StoredUser[]>(this.usersFile(), [])
+    return users.find((u) => u.id === id) ?? null
   }
 
   // --- projects ---

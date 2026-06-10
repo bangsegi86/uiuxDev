@@ -6,6 +6,14 @@ import type {
   TreeNode
 } from '@uiux/shared'
 
+/** Server-internal user record (includes the password hash). */
+export interface StoredUser {
+  id: string
+  email: string
+  passwordHash: string
+  createdAt: string
+}
+
 /**
  * A storage adapter provides persistence for every resource in the builder.
  * Implementations: LocalFileAdapter (JSON on disk) and KnexAdapter (SQL).
@@ -14,6 +22,11 @@ import type {
 export interface StorageAdapter {
   readonly name: string
   init(): Promise<void>
+
+  // Users
+  createUser(user: StoredUser): Promise<StoredUser>
+  getUserByEmail(email: string): Promise<StoredUser | null>
+  getUserById(id: string): Promise<StoredUser | null>
 
   // Projects
   listProjects(): Promise<Project[]>
