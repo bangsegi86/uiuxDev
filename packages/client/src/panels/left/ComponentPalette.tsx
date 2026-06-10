@@ -1,0 +1,66 @@
+import { PRIMITIVES } from '@uiux/shared'
+import { useEditor } from '../../state/editorStore'
+import { useI18n } from '../../i18n/I18nContext'
+import type { DragPayload } from '../center/Canvas'
+
+function setDrag(e: React.DragEvent, payload: DragPayload) {
+  e.dataTransfer.setData('application/uiux', JSON.stringify(payload))
+  e.dataTransfer.effectAllowed = 'copy'
+}
+
+export function ComponentPalette() {
+  const { t } = useI18n()
+  const screen = useEditor((s) => s.screen)
+  const components = useEditor((s) => s.components)
+  const insertPrimitive = useEditor((s) => s.insertPrimitive)
+  const insertDefinition = useEditor((s) => s.insertDefinition)
+  const deleteComponent = useEditor((s) => s.deleteComponent)
+
+  return (
+    <div className="left-tab-body">
+      <div className="palette-section-title">{t.components}</div>
+      <div className="palette-grid">
+        {PRIMITIVES.map((p) => (
+          <div
+            key={p.type}
+            className="palette-item"
+            draggable
+            onDragStart={(e) => setDrag(e, { kind: 'primitive', type: p.type })}
+            onClick={() => screen && insertPrimitive(p.type, { x: 40, y: 40 })}
+            title={p.label}
+          >
+            <span className="palette-icon">{p.icon}</span>
+            <span className="palette-label">{p.label}</span>
+          </div>
+        ))}
+      </div>
+
+      <div className="palette-section-title">{t.myComponents}</div>
+      {components.length === 0 && <div className="empty-hint small">—</div>}
+      <div className="palette-list">
+        {components.map((c) => (
+          <div
+            key={c.id}
+            className="palette-row"
+            draggable
+            onDragStart={(e) => setDrag(e, { kind: 'component', definition: c.definition })}
+            onClick={() => screen && insertDefinition(c.definition, { x: 40, y: 40 })}
+          >
+            <span className="palette-icon">▤</span>
+            <span className="palette-label grow">{c.name}</span>
+            <button
+              className="icon-btn"
+              title={t.delete}
+              onClick={(e) => {
+                e.stopPropagation()
+                void deleteComponent(c.id)
+              }}
+            >
+              ×
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}

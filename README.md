@@ -1,1 +1,90 @@
-# uiuxDev
+# uiuxDev — WYSIWYG UI/UX Builder
+
+웹 기반 위지윅(WYSIWYG) UI/UX 빌더입니다. **PC·모바일 화면**을 컴포넌트로 구성하고,
+사용자가 직접 컴포넌트를 만들어 재사용하며, 프로젝트/폴더/화면 단위로 관리합니다.
+**서버 + 클라이언트** 웹 애플리케이션이며, 저장은 **로컬 파일(기본)** 또는
+**데이터베이스(PostgreSQL / Oracle)** 중에서 선택할 수 있습니다.
+
+## 주요 기능
+
+- **3분할 편집기**: 왼쪽(컴포넌트·탐색기·템플릿) · 가운데(디자인 캔버스) · 오른쪽(속성)
+- **PC / 모바일** 화면 전환 (디바이스별 캔버스 프레임)
+- **드래그&드롭 배치**, 이동/리사이즈, 마키(영역) 다중 선택
+- **정렬**: 좌/가운데/우 · 상/중앙/하 정렬, 가로/세로 균등 분배
+- **복사 / 붙여넣기 / 복제 / 삭제** (Ctrl+C / V / D / Del, Ctrl+S 저장)
+- **노코드 커스텀 컴포넌트**: 캔버스에서 선택한 요소들을 묶어 "내 컴포넌트"로 저장 후 재사용
+- **템플릿(자주 쓰는 화면 디자인)** 저장 및 현재 화면에 적용
+- **하단 설계 메모 패널** (접기/펼치기)
+- **프로젝트 / 폴더 / 화면 파일 탐색기**
+- **한국어 / 영어** UI 전환
+
+## 구조 (npm workspaces 모노레포)
+
+```
+packages/
+  shared/   # 공용 타입 · Zod 스키마 · 프리미티브 레지스트리 · API 계약
+  server/   # Fastify REST API + 스토리지 어댑터(로컬/Knex) + 마이그레이션
+  client/   # React + Vite + Zustand 편집기
+```
+
+## 개발 실행
+
+```bash
+npm install
+npm run dev          # 서버(:4000) + 클라이언트(:5173) 동시 실행
+```
+
+클라이언트는 `/api`를 서버로 프록시합니다. 브라우저에서 http://localhost:5173 접속.
+
+개별 실행:
+
+```bash
+npm run dev:server   # API 서버만
+npm run dev:client   # 클라이언트만
+```
+
+## 빌드 / 타입체크 / 테스트
+
+```bash
+npm run build        # 모든 패키지 빌드
+npm run typecheck    # 전체 타입체크
+npm run test         # 서버 스모크 테스트(스토리지+REST 전 과정)
+```
+
+## 저장 방식 설정
+
+`packages/server/.env`(또는 환경변수)의 `STORAGE_DRIVER`로 선택합니다
+(`packages/server/.env.example` 참고).
+
+| STORAGE_DRIVER | 설명 | 필요 설정 |
+| --- | --- | --- |
+| `local` (기본) | 서버 로컬 JSON 파일 저장 | `DATA_DIR` (기본 `./data`) |
+| `postgres` | PostgreSQL | `PG_HOST/PG_PORT/PG_USER/PG_PASSWORD/PG_DATABASE` |
+| `oracle` | Oracle | `ORACLE_USER/ORACLE_PASSWORD/ORACLE_CONNECT_STRING` |
+
+로컬 모드의 파일 레이아웃은 앱의 파일 탐색기와 동일하게 구성됩니다:
+
+```
+data/
+  projects.json
+  <projectId>/
+    tree.json            # 폴더/화면 트리
+    components.json      # 커스텀 컴포넌트
+    templates.json       # 화면 템플릿
+    screens/<id>.json    # 화면 디자인
+```
+
+### DB 마이그레이션
+
+```bash
+# PostgreSQL
+STORAGE_DRIVER=postgres npm run migrate
+# Oracle (oracledb 드라이버 + Instant Client 필요)
+STORAGE_DRIVER=oracle npm run migrate
+```
+
+> 서버 기동 시(`postgres`/`oracle`)에도 마이그레이션이 자동 적용됩니다.
+
+## 기술 스택
+
+React · TypeScript · Vite · Zustand · Fastify · Knex · Zod
