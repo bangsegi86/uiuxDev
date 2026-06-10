@@ -1,14 +1,17 @@
 import { getPrimitive, type PropField } from '@uiux/shared'
 import { useEditor } from '../../state/editorStore'
+import { findNode } from '../../state/tree'
 import { useI18n } from '../../i18n/I18nContext'
 
 export function PropertyPanel() {
   const { t } = useI18n()
   const screen = useEditor((s) => s.screen)
   const selection = useEditor((s) => s.selection)
+  const components = useEditor((s) => s.components)
   const updateProp = useEditor((s) => s.updateProp)
   const updateStyle = useEditor((s) => s.updateStyle)
   const updateLayout = useEditor((s) => s.updateLayout)
+  const detachComponentInstance = useEditor((s) => s.detachComponentInstance)
   const checkpoint = useEditor((s) => s.checkpoint)
 
   if (!screen || selection.length === 0) {
@@ -32,8 +35,41 @@ export function PropertyPanel() {
     )
   }
 
-  const node = screen.root.children.find((c) => c.id === selection[0])
+  const node = findNode(screen.root, selection[0])?.node
   if (!node) return <aside className="panel right-panel" />
+
+  // Linked custom-component instance: show its source + detach action.
+  if (node.type.startsWith('custom:')) {
+    const comp = components.find((c) => c.id === node.type.slice('custom:'.length))
+    return (
+      <aside className="panel right-panel">
+        <div className="panel-title">{t.componentInstance}</div>
+        <div className="prop-group">
+          <div className="field">
+            <span>{t.myComponents}</span>
+            <strong>{comp?.name ?? '—'}</strong>
+          </div>
+          <div className="xy-grid">
+            {(['x', 'y', 'w', 'h'] as const).map((k) => (
+              <label className="field inline" key={k}>
+                <span>{k.toUpperCase()}</span>
+                <input
+                  type="number"
+                  value={Math.round(node.layout[k])}
+                  onFocus={checkpoint}
+                  onChange={(e) => updateLayout(node.id, { [k]: Number(e.target.value) })}
+                />
+              </label>
+            ))}
+          </div>
+          <button className="detach-btn" onClick={() => detachComponentInstance(node.id)}>
+            {t.detach}
+          </button>
+        </div>
+      </aside>
+    )
+  }
+
   const def = getPrimitive(node.type)
 
   const renderField = (f: PropField) => {

@@ -16,6 +16,28 @@ function toCss(style: Record<string, string>): CSSProperties {
 
 const fill: CSSProperties = { width: '100%', height: '100%', boxSizing: 'border-box' }
 
+/**
+ * Render a node subtree statically (no interaction), used to display a linked
+ * custom-component instance from its stored definition.
+ */
+export function renderStaticTree(node: NodeInstance): React.ReactNode {
+  return (
+    <div
+      key={node.id}
+      style={{
+        position: 'absolute',
+        left: node.layout.x,
+        top: node.layout.y,
+        width: node.layout.w,
+        height: node.layout.h
+      }}
+    >
+      <div style={{ width: '100%', height: '100%' }}>{renderPrimitive(node)}</div>
+      {node.children.map(renderStaticTree)}
+    </div>
+  )
+}
+
 /** Render the inner content of a primitive (the outer positioned box is the canvas's job). */
 export function renderPrimitive(node: NodeInstance): React.ReactNode {
   const css = { ...fill, ...toCss(node.style) }

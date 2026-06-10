@@ -14,11 +14,18 @@ import {
 } from '@uiux/shared'
 import { api } from '../lib/apiClient'
 import {
+  absoluteOrigin,
   boundingBox,
   cloneWithNewIds,
+  deepestContainerAt,
+  descendantIds,
   expandDefinition,
-  groupIntoDefinition
-} from './instanceUtils'
+  findNode,
+  groupIntoDefinition,
+  insertChildren,
+  removeNodes,
+  updateNode
+} from './tree'
 
 export type AlignKind = 'left' | 'centerH' | 'right' | 'top' | 'middle' | 'bottom'
 export type DistributeKind = 'horizontal' | 'vertical'
@@ -34,7 +41,7 @@ interface EditorState {
   // active screen
   screen: Screen | null
   selection: string[]
-  clipboard: NodeInstance[] | null
+  clipboard: { parentId: string; nodes: NodeInstance[] } | null
   zoom: number
   saving: boolean
   dirty: boolean
@@ -67,11 +74,14 @@ interface EditorState {
   // canvas actions
   setSelection: (ids: string[]) => void
   toggleSelection: (id: string) => void
-  insertPrimitive: (type: string, at: { x: number; y: number }) => void
-  insertDefinition: (def: NodeInstance, at: { x: number; y: number }) => void
+  insertPrimitive: (type: string, at: { x: number; y: number }, parentId?: string) => void
+  insertDefinition: (def: NodeInstance, at: { x: number; y: number }, parentId?: string) => void
+  insertComponentInstance: (componentId: string, at: { x: number; y: number }, parentId?: string) => void
+  detachComponentInstance: (id: string) => void
   updateLayout: (id: string, patch: Partial<Layout>) => void
   updateProp: (id: string, key: string, value: unknown) => void
   updateStyle: (id: string, key: string, value: string) => void
+  reparent: (id: string, absPoint: { x: number; y: number }) => void
   copy: () => void
   paste: () => void
   duplicate: () => void
@@ -94,15 +104,6 @@ interface EditorState {
 
   // persistence
   saveScreen: () => Promise<void>
-}
-
-/** Replace one top-level instance immutably and return a new children array. */
-function patchChild(
-  children: NodeInstance[],
-  id: string,
-  fn: (n: NodeInstance) => NodeInstance
-): NodeInstance[] {
-  return children.map((c) => (c.id === id ? fn(c) : c))
 }
 
 export const useEditor = create<EditorState>((set, get) => ({
@@ -216,31 +217,79 @@ export const useEditor = create<EditorState>((set, get) => ({
         : { selection: [...s.selection, id] }
     ),
 
-  insertPrimitive: (type, at) => {
+  insertPrimitive: (type, at, parentId = 'root') => {
     const { screen } = get()
     if (!screen) return
     get().checkpoint()
     const inst = createInstance(type, nanoid(10), at)
     set({
-      screen: { ...screen, root: { ...screen.root, children: [...screen.root.children, inst] } },
+      screen: { ...screen, root: insertChildren(screen.root, parentId, [inst]) },
       selection: [inst.id],
       dirty: true
     })
   },
 
-  insertDefinition: (def, at) => {
+  insertDefinition: (def, at, parentId = 'root') => {
     const { screen } = get()
     if (!screen) return
     get().checkpoint()
     const instances = expandDefinition(def, at)
     set({
-      screen: {
-        ...screen,
-        root: { ...screen.root, children: [...screen.root.children, ...instances] }
-      },
+      screen: { ...screen, root: insertChildren(screen.root, parentId, instances) },
       selection: instances.map((i) => i.id),
       dirty: true
     })
+  },
+
+  /** Insert a *linked* custom-component instance (renders live from its definition). */
+  insertComponentInstance: (componentId, at, parentId = 'root') => {
+    const { screen, components } = get()
+    if (!screen) return
+    const comp = components.find((c) => c.id === componentId)
+    if (!comp) return
+    get().checkpoint()
+    const inst: NodeInstance = {
+      id: nanoid(10),
+      type: `custom:${componentId}`,
+      props: {},
+      style: {},
+      layout: { x: at.x, y: at.y, w: comp.definition.layout.w, h: comp.definition.layout.h },
+      children: []
+    }
+    set({
+      screen: { ...screen, root: insertChildren(screen.root, parentId, [inst]) },
+      selection: [inst.id],
+      dirty: true
+    })
+  },
+
+  /** Break a linked instance into editable primitives at its position/scale. */
+  detachComponentInstance: (id) => {
+    const { screen, components } = get()
+    if (!screen) return
+    const found = findNode(screen.root, id)
+    if (!found || !found.node.type.startsWith('custom:')) return
+    const comp = components.find((c) => c.id === found.node.type.slice('custom:'.length))
+    if (!comp) return
+    get().checkpoint()
+    const sx = found.node.layout.w / (comp.definition.layout.w || 1)
+    const sy = found.node.layout.h / (comp.definition.layout.h || 1)
+    const parentId = found.parent?.id ?? 'root'
+    const expanded = comp.definition.children.map((child) => {
+      const clone = cloneWithNewIds(child)
+      return {
+        ...clone,
+        layout: {
+          x: Math.round(found.node.layout.x + clone.layout.x * sx),
+          y: Math.round(found.node.layout.y + clone.layout.y * sy),
+          w: Math.round(clone.layout.w * sx),
+          h: Math.round(clone.layout.h * sy)
+        }
+      }
+    })
+    let root = removeNodes(screen.root, new Set([id]))
+    root = insertChildren(root, parentId, expanded)
+    set({ screen: { ...screen, root }, selection: expanded.map((e) => e.id), dirty: true })
   },
 
   updateLayout: (id, patch) => {
@@ -249,13 +298,7 @@ export const useEditor = create<EditorState>((set, get) => ({
     set({
       screen: {
         ...screen,
-        root: {
-          ...screen.root,
-          children: patchChild(screen.root.children, id, (n) => ({
-            ...n,
-            layout: { ...n.layout, ...patch }
-          }))
-        }
+        root: updateNode(screen.root, id, (n) => ({ ...n, layout: { ...n.layout, ...patch } }))
       },
       dirty: true
     })
@@ -267,13 +310,7 @@ export const useEditor = create<EditorState>((set, get) => ({
     set({
       screen: {
         ...screen,
-        root: {
-          ...screen.root,
-          children: patchChild(screen.root.children, id, (n) => ({
-            ...n,
-            props: { ...n.props, [key]: value }
-          }))
-        }
+        root: updateNode(screen.root, id, (n) => ({ ...n, props: { ...n.props, [key]: value } }))
       },
       dirty: true
     })
@@ -285,35 +322,58 @@ export const useEditor = create<EditorState>((set, get) => ({
     set({
       screen: {
         ...screen,
-        root: {
-          ...screen.root,
-          children: patchChild(screen.root.children, id, (n) => ({
-            ...n,
-            style: { ...n.style, [key]: value }
-          }))
-        }
+        root: updateNode(screen.root, id, (n) => ({ ...n, style: { ...n.style, [key]: value } }))
       },
       dirty: true
     })
   },
 
+  /** Re-parent a single node into the deepest container under a canvas point. */
+  reparent: (id, absPoint) => {
+    const { screen } = get()
+    if (!screen) return
+    const found = findNode(screen.root, id)
+    if (!found) return
+    const exclude = new Set<string>([id, ...descendantIds(found.node)])
+    const target = deepestContainerAt(screen.root, absPoint.x, absPoint.y, exclude)
+    const currentParentId = found.parent?.id ?? 'root'
+    if (target.id === currentParentId) return
+    // Absolute origin of the node, converted into the new parent's frame.
+    const abs = absoluteOrigin(screen.root, id)!
+    const newLayout = { ...found.node.layout, x: abs.x - target.originX, y: abs.y - target.originY }
+    get().checkpoint()
+    const detached = { ...found.node, layout: newLayout }
+    let root = removeNodes(screen.root, new Set([id]))
+    root = insertChildren(root, target.id, [detached])
+    set({ screen: { ...screen, root }, dirty: true })
+  },
+
   copy: () => {
     const { screen, selection } = get()
-    if (!screen) return
-    const items = screen.root.children.filter((c) => selection.includes(c.id))
-    if (items.length) set({ clipboard: items.map((i) => ({ ...i })) })
+    if (!screen || !selection.length) return
+    const nodes: NodeInstance[] = []
+    let parentId = 'root'
+    for (const sid of selection) {
+      const f = findNode(screen.root, sid)
+      if (f) {
+        nodes.push(f.node)
+        parentId = f.parent?.id ?? 'root'
+      }
+    }
+    if (nodes.length) set({ clipboard: { parentId, nodes } })
   },
 
   paste: () => {
     const { screen, clipboard } = get()
-    if (!screen || !clipboard?.length) return
+    if (!screen || !clipboard?.nodes.length) return
     get().checkpoint()
-    const clones = clipboard.map((c) => {
+    const clones = clipboard.nodes.map((c) => {
       const copy = cloneWithNewIds(c)
       return { ...copy, layout: { ...copy.layout, x: copy.layout.x + 24, y: copy.layout.y + 24 } }
     })
+    const target = findNode(screen.root, clipboard.parentId) ? clipboard.parentId : 'root'
     set({
-      screen: { ...screen, root: { ...screen.root, children: [...screen.root.children, ...clones] } },
+      screen: { ...screen, root: insertChildren(screen.root, target, clones) },
       selection: clones.map((c) => c.id),
       dirty: true
     })
@@ -329,13 +389,7 @@ export const useEditor = create<EditorState>((set, get) => ({
     if (!screen || !selection.length) return
     get().checkpoint()
     set({
-      screen: {
-        ...screen,
-        root: {
-          ...screen.root,
-          children: screen.root.children.filter((c) => !selection.includes(c.id))
-        }
-      },
+      screen: { ...screen, root: removeNodes(screen.root, new Set(selection)) },
       selection: [],
       dirty: true
     })
@@ -344,76 +398,57 @@ export const useEditor = create<EditorState>((set, get) => ({
   align: (kind) => {
     const { screen, selection } = get()
     if (!screen || selection.length < 2) return
+    const found = selection.map((id) => findNode(screen.root, id)).filter(Boolean) as { node: NodeInstance; parent: NodeInstance | null }[]
+    // Alignment is only meaningful among siblings (same parent frame).
+    const parentIds = new Set(found.map((f) => f.parent?.id ?? 'root'))
+    if (parentIds.size !== 1) return
     get().checkpoint()
-    const items = screen.root.children.filter((c) => selection.includes(c.id))
+    const items = found.map((f) => f.node)
     const box = boundingBox(items)
-    const move = (n: NodeInstance): NodeInstance => {
-      const l = { ...n.layout }
+    const newLayout = (n: NodeInstance): Partial<Layout> => {
       switch (kind) {
         case 'left':
-          l.x = box.x
-          break
+          return { x: box.x }
         case 'right':
-          l.x = box.x + box.w - l.w
-          break
+          return { x: box.x + box.w - n.layout.w }
         case 'centerH':
-          l.x = box.x + (box.w - l.w) / 2
-          break
+          return { x: box.x + (box.w - n.layout.w) / 2 }
         case 'top':
-          l.y = box.y
-          break
+          return { y: box.y }
         case 'bottom':
-          l.y = box.y + box.h - l.h
-          break
+          return { y: box.y + box.h - n.layout.h }
         case 'middle':
-          l.y = box.y + (box.h - l.h) / 2
-          break
+          return { y: box.y + (box.h - n.layout.h) / 2 }
       }
-      return { ...n, layout: l }
     }
-    set({
-      screen: {
-        ...screen,
-        root: {
-          ...screen.root,
-          children: screen.root.children.map((c) => (selection.includes(c.id) ? move(c) : c))
-        }
-      },
-      dirty: true
-    })
+    let root = screen.root
+    for (const n of items) root = updateNode(root, n.id, (x) => ({ ...x, layout: { ...x.layout, ...newLayout(x) } }))
+    set({ screen: { ...screen, root }, dirty: true })
   },
 
   distribute: (kind) => {
     const { screen, selection } = get()
     if (!screen || selection.length < 3) return
+    const found = selection.map((id) => findNode(screen.root, id)).filter(Boolean) as { node: NodeInstance; parent: NodeInstance | null }[]
+    const parentIds = new Set(found.map((f) => f.parent?.id ?? 'root'))
+    if (parentIds.size !== 1) return
     get().checkpoint()
-    const items = screen.root.children
-      .filter((c) => selection.includes(c.id))
+    const items = found
+      .map((f) => f.node)
       .sort((a, b) => (kind === 'horizontal' ? a.layout.x - b.layout.x : a.layout.y - b.layout.y))
-    const first = items[0]
-    const last = items[items.length - 1]
-    const start = kind === 'horizontal' ? first.layout.x : first.layout.y
-    const end = kind === 'horizontal' ? last.layout.x : last.layout.y
+    const start = kind === 'horizontal' ? items[0].layout.x : items[0].layout.y
+    const end =
+      kind === 'horizontal' ? items[items.length - 1].layout.x : items[items.length - 1].layout.y
     const step = (end - start) / (items.length - 1)
-    const positions = new Map<string, number>()
-    items.forEach((it, i) => positions.set(it.id, start + step * i))
-    set({
-      screen: {
-        ...screen,
-        root: {
-          ...screen.root,
-          children: screen.root.children.map((c) => {
-            if (!positions.has(c.id)) return c
-            const v = positions.get(c.id)!
-            return {
-              ...c,
-              layout: kind === 'horizontal' ? { ...c.layout, x: v } : { ...c.layout, y: v }
-            }
-          })
-        }
-      },
-      dirty: true
+    let root = screen.root
+    items.forEach((it, i) => {
+      const v = start + step * i
+      root = updateNode(root, it.id, (x) => ({
+        ...x,
+        layout: kind === 'horizontal' ? { ...x.layout, x: v } : { ...x.layout, y: v }
+      }))
     })
+    set({ screen: { ...screen, root }, dirty: true })
   },
 
   setDevice: (device) => {
@@ -443,7 +478,9 @@ export const useEditor = create<EditorState>((set, get) => ({
   saveAsComponent: async (name) => {
     const { projectId, screen, selection } = get()
     if (!projectId || !screen || !selection.length) return
-    const items = screen.root.children.filter((c) => selection.includes(c.id))
+    const items = selection
+      .map((id) => findNode(screen.root, id)?.node)
+      .filter(Boolean) as NodeInstance[]
     const def = groupIntoDefinition(items)
     const component = await api.createComponent(projectId, name, def)
     set((s) => ({ components: [...s.components, component] }))

@@ -1,18 +1,46 @@
 import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
-import type { Layout, NodeInstance } from '@uiux/shared'
+import { isContainerType, type Layout, type NodeInstance } from '@uiux/shared'
 import { useEditor } from '../../state/editorStore'
-import { renderPrimitive } from '../../componentRegistry'
+import { absoluteOrigin } from '../../state/tree'
+import { renderPrimitive, renderStaticTree } from '../../componentRegistry'
 
 /** Drag payload format shared with the palette / component list. */
 export interface DragPayload {
   kind: 'primitive' | 'component'
   type?: string
-  definition?: NodeInstance
+  componentId?: string
+}
+
+/** Live, read-only render of a linked custom-component instance, scaled to fit. */
+function CustomInstanceView({ node }: { node: NodeInstance }) {
+  const components = useEditor((s) => s.components)
+  const comp = components.find((c) => c.id === node.type.slice('custom:'.length))
+  if (!comp) return <div className="missing-component">?</div>
+  const def = comp.definition
+  const sx = node.layout.w / (def.layout.w || 1)
+  const sy = node.layout.h / (def.layout.h || 1)
+  return (
+    <div
+      className="custom-instance"
+      style={{
+        position: 'absolute',
+        left: 0,
+        top: 0,
+        width: def.layout.w,
+        height: def.layout.h,
+        transform: `scale(${sx}, ${sy})`,
+        transformOrigin: 'top left',
+        pointerEvents: 'none'
+      }}
+    >
+      {def.children.map(renderStaticTree)}
+    </div>
+  )
 }
 
 type Interaction =
   | { mode: 'idle' }
-  | { mode: 'move'; startX: number; startY: number; origin: Record<string, Layout> }
+  | { mode: 'move'; startX: number; startY: number; origin: Record<string, Layout>; singleId?: string }
   | { mode: 'resize'; id: string; handle: string; startX: number; startY: number; origin: Layout }
   | { mode: 'marquee'; startX: number; startY: number; x: number; y: number }
 
@@ -26,7 +54,8 @@ export function Canvas() {
   const toggleSelection = useEditor((s) => s.toggleSelection)
   const updateLayout = useEditor((s) => s.updateLayout)
   const insertPrimitive = useEditor((s) => s.insertPrimitive)
-  const insertDefinition = useEditor((s) => s.insertDefinition)
+  const insertComponentInstance = useEditor((s) => s.insertComponentInstance)
+  const reparent = useEditor((s) => s.reparent)
   const checkpoint = useEditor((s) => s.checkpoint)
 
   const frameRef = useRef<HTMLDivElement>(null)
@@ -35,7 +64,7 @@ export function Canvas() {
   if (!screen) return null
   const { width, height } = screen.canvas
 
-  /** Convert a pointer event to canvas-space coordinates. */
+  /** Convert a client point to canvas-space (root frame) coordinates. */
   const toCanvas = (clientX: number, clientY: number) => {
     const rect = frameRef.current!.getBoundingClientRect()
     return { x: (clientX - rect.left) / zoom, y: (clientY - rect.top) / zoom }
@@ -55,9 +84,13 @@ export function Canvas() {
     }
     const { x, y } = toCanvas(e.clientX, e.clientY)
     const origin: Record<string, Layout> = {}
-    for (const c of screen.root.children) if (sel.includes(c.id)) origin[c.id] = { ...c.layout }
+    const collect = (n: NodeInstance) => {
+      if (sel.includes(n.id)) origin[n.id] = { ...n.layout }
+      n.children.forEach(collect)
+    }
+    screen.root.children.forEach(collect)
     checkpoint()
-    setIt({ mode: 'move', startX: x, startY: y, origin })
+    setIt({ mode: 'move', startX: x, startY: y, origin, singleId: sel.length === 1 ? node.id : undefined })
     ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
   }
 
@@ -81,6 +114,7 @@ export function Canvas() {
     if (it.mode === 'idle') return
     const { x, y } = toCanvas(e.clientX, e.clientY)
     if (it.mode === 'move') {
+      // Relative-layout delta equals canvas delta at any nesting depth.
       const dx = x - it.startX
       const dy = y - it.startY
       for (const id of Object.keys(it.origin)) {
@@ -124,20 +158,33 @@ export function Canvas() {
         )
         .map((c) => c.id)
       setSelection(hit)
+    } else if (it.mode === 'move' && it.singleId) {
+      // Re-parent into the container the node now sits over (by its center).
+      const cur = useEditor.getState().screen
+      if (cur) {
+        const origin = absoluteOrigin(cur.root, it.singleId)
+        const node = it.origin[it.singleId]
+        if (origin && node) {
+          reparent(it.singleId, { x: origin.x + node.w / 2, y: origin.y + node.h / 2 })
+        }
+      }
     }
     setIt({ mode: 'idle' })
   }
 
-  const onDrop = (e: React.DragEvent) => {
+  const onDropInto = (e: React.DragEvent, parentId: string) => {
     e.preventDefault()
+    e.stopPropagation()
     const raw = e.dataTransfer.getData('application/uiux')
     if (!raw) return
     const payload = JSON.parse(raw) as DragPayload
-    const { x, y } = toCanvas(e.clientX, e.clientY)
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+    const x = Math.round((e.clientX - rect.left) / zoom)
+    const y = Math.round((e.clientY - rect.top) / zoom)
     if (payload.kind === 'primitive' && payload.type) {
-      insertPrimitive(payload.type, { x: Math.round(x), y: Math.round(y) })
-    } else if (payload.kind === 'component' && payload.definition) {
-      insertDefinition(payload.definition, { x: Math.round(x), y: Math.round(y) })
+      insertPrimitive(payload.type, { x, y }, parentId)
+    } else if (payload.kind === 'component' && payload.componentId) {
+      insertComponentInstance(payload.componentId, { x, y }, parentId)
     }
   }
 
@@ -151,6 +198,37 @@ export function Canvas() {
         }
       : null
 
+  const renderNode = (node: NodeInstance): React.ReactNode => {
+    const selected = selection.includes(node.id)
+    const isCustom = node.type.startsWith('custom:')
+    const container = !isCustom && isContainerType(node.type)
+    return (
+      <div
+        key={node.id}
+        className={`canvas-item${selected ? ' selected' : ''}${isCustom ? ' custom' : ''}`}
+        style={{ left: node.layout.x, top: node.layout.y, width: node.layout.w, height: node.layout.h }}
+        onPointerDown={(e) => onItemPointerDown(e, node)}
+        onDragOver={container ? (e) => e.preventDefault() : undefined}
+        onDrop={container ? (e) => onDropInto(e, node.id) : undefined}
+      >
+        {isCustom ? (
+          <CustomInstanceView node={node} />
+        ) : (
+          <div className="canvas-item-inner">{renderPrimitive(node)}</div>
+        )}
+        {!isCustom && node.children.map(renderNode)}
+        {selected && selection.length === 1 &&
+          HANDLES.map((h) => (
+            <div
+              key={h}
+              className={`resize-handle handle-${h}`}
+              onPointerDown={(e) => onResizePointerDown(e, node, h)}
+            />
+          ))}
+      </div>
+    )
+  }
+
   return (
     <div className="canvas-scroll">
       <div
@@ -161,34 +239,9 @@ export function Canvas() {
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onDragOver={(e) => e.preventDefault()}
-        onDrop={onDrop}
+        onDrop={(e) => onDropInto(e, 'root')}
       >
-        {screen.root.children.map((node) => {
-          const selected = selection.includes(node.id)
-          return (
-            <div
-              key={node.id}
-              className={`canvas-item${selected ? ' selected' : ''}`}
-              style={{
-                left: node.layout.x,
-                top: node.layout.y,
-                width: node.layout.w,
-                height: node.layout.h
-              }}
-              onPointerDown={(e) => onItemPointerDown(e, node)}
-            >
-              <div className="canvas-item-inner">{renderPrimitive(node)}</div>
-              {selected && selection.length === 1 &&
-                HANDLES.map((h) => (
-                  <div
-                    key={h}
-                    className={`resize-handle handle-${h}`}
-                    onPointerDown={(e) => onResizePointerDown(e, node, h)}
-                  />
-                ))}
-            </div>
-          )
-        })}
+        {screen.root.children.map(renderNode)}
         {marquee && (
           <div
             className="marquee"

@@ -13,7 +13,7 @@ export function ComponentPalette() {
   const screen = useEditor((s) => s.screen)
   const components = useEditor((s) => s.components)
   const insertPrimitive = useEditor((s) => s.insertPrimitive)
-  const insertDefinition = useEditor((s) => s.insertDefinition)
+  const insertComponentInstance = useEditor((s) => s.insertComponentInstance)
   const deleteComponent = useEditor((s) => s.deleteComponent)
 
   return (
@@ -43,8 +43,8 @@ export function ComponentPalette() {
             key={c.id}
             className="palette-row"
             draggable
-            onDragStart={(e) => setDrag(e, { kind: 'component', definition: c.definition })}
-            onClick={() => screen && insertDefinition(c.definition, { x: 40, y: 40 })}
+            onDragStart={(e) => setDrag(e, { kind: 'component', componentId: c.id })}
+            onClick={() => screen && insertComponentInstance(c.id, { x: 40, y: 40 })}
           >
             <span className="palette-icon">▤</span>
             <span className="palette-label grow">{c.name}</span>
