@@ -1,11 +1,12 @@
 import { getPrimitive, type PropField } from '@uiux/shared'
-import { useEditor } from '../../state/editorStore'
+import { selectRoot, useEditor } from '../../state/editorStore'
 import { findNode } from '../../state/tree'
 import { useI18n } from '../../i18n/I18nContext'
+import { GridEditor } from './GridEditor'
 
 export function PropertyPanel() {
   const { t } = useI18n()
-  const screen = useEditor((s) => s.screen)
+  const root = useEditor(selectRoot)
   const selection = useEditor((s) => s.selection)
   const components = useEditor((s) => s.components)
   const updateProp = useEditor((s) => s.updateProp)
@@ -14,7 +15,7 @@ export function PropertyPanel() {
   const detachComponentInstance = useEditor((s) => s.detachComponentInstance)
   const checkpoint = useEditor((s) => s.checkpoint)
 
-  if (!screen || selection.length === 0) {
+  if (!root || selection.length === 0) {
     return (
       <aside className="panel right-panel">
         <div className="panel-title">{t.properties}</div>
@@ -35,7 +36,7 @@ export function PropertyPanel() {
     )
   }
 
-  const node = findNode(screen.root, selection[0])?.node
+  const node = findNode(root, selection[0])?.node
   if (!node) return <aside className="panel right-panel" />
 
   // Linked custom-component instance: show its source + detach action.
@@ -145,6 +146,13 @@ export function PropertyPanel() {
           ))}
         </div>
       </div>
+
+      {def?.customEditor === 'grid' && (
+        <div className="prop-group">
+          <div className="prop-group-title">{t.grid}</div>
+          <GridEditor node={node} updateProp={updateProp} checkpoint={checkpoint} />
+        </div>
+      )}
 
       <div className="prop-group">
         <div className="prop-group-title">{t.content} / {t.style}</div>

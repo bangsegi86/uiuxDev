@@ -51,6 +51,11 @@ export interface StorageAdapter {
   // Custom components
   listComponents(projectId: string): Promise<CustomComponent[]>
   createComponent(projectId: string, c: CustomComponent): Promise<CustomComponent>
+  updateComponent(
+    projectId: string,
+    id: string,
+    patch: Partial<CustomComponent>
+  ): Promise<CustomComponent | null>
   deleteComponent(projectId: string, id: string): Promise<void>
 
   // Templates

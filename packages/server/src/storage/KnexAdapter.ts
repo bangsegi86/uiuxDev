@@ -179,6 +179,20 @@ export class KnexAdapter implements StorageAdapter {
     })
     return c
   }
+  async updateComponent(
+    projectId: string,
+    id: string,
+    patch: Partial<CustomComponent>
+  ): Promise<CustomComponent | null> {
+    const row: Record<string, unknown> = {}
+    if (patch.name !== undefined) row.name = patch.name
+    if (patch.thumbnail !== undefined) row.thumbnail = patch.thumbnail ?? null
+    if (patch.definition !== undefined) row.definition = JSON.stringify(patch.definition)
+    if (patch.updatedAt !== undefined) row.updatedAt = patch.updatedAt
+    if (Object.keys(row).length) await this.db('custom_components').where({ projectId, id }).update(row)
+    const found = (await this.listComponents(projectId)).find((c) => c.id === id)
+    return found ?? null
+  }
   async deleteComponent(projectId: string, id: string): Promise<void> {
     await this.db('custom_components').where({ projectId, id }).del()
   }

@@ -1,5 +1,5 @@
 import { PRIMITIVES } from '@uiux/shared'
-import { useEditor } from '../../state/editorStore'
+import { selectRoot, useEditor } from '../../state/editorStore'
 import { useI18n } from '../../i18n/I18nContext'
 import type { DragPayload } from '../center/Canvas'
 
@@ -10,11 +10,13 @@ function setDrag(e: React.DragEvent, payload: DragPayload) {
 
 export function ComponentPalette() {
   const { t } = useI18n()
-  const screen = useEditor((s) => s.screen)
+  const canInsert = useEditor((s) => selectRoot(s) != null)
   const components = useEditor((s) => s.components)
   const insertPrimitive = useEditor((s) => s.insertPrimitive)
   const insertComponentInstance = useEditor((s) => s.insertComponentInstance)
   const deleteComponent = useEditor((s) => s.deleteComponent)
+  const newComponent = useEditor((s) => s.newComponent)
+  const editComponent = useEditor((s) => s.editComponent)
 
   return (
     <div className="left-tab-body">
@@ -26,7 +28,7 @@ export function ComponentPalette() {
             className="palette-item"
             draggable
             onDragStart={(e) => setDrag(e, { kind: 'primitive', type: p.type })}
-            onClick={() => screen && insertPrimitive(p.type, { x: 40, y: 40 })}
+            onClick={() => canInsert && insertPrimitive(p.type, { x: 40, y: 40 })}
             title={p.label}
           >
             <span className="palette-icon">{p.icon}</span>
@@ -35,7 +37,12 @@ export function ComponentPalette() {
         ))}
       </div>
 
-      <div className="palette-section-title">{t.myComponents}</div>
+      <div className="palette-section-title">
+        {t.myComponents}
+        <button className="icon-btn" title={t.newComponent} onClick={newComponent}>
+          ＋
+        </button>
+      </div>
       {components.length === 0 && <div className="empty-hint small">—</div>}
       <div className="palette-list">
         {components.map((c) => (
@@ -44,10 +51,20 @@ export function ComponentPalette() {
             className="palette-row"
             draggable
             onDragStart={(e) => setDrag(e, { kind: 'component', componentId: c.id })}
-            onClick={() => screen && insertComponentInstance(c.id, { x: 40, y: 40 })}
+            onClick={() => canInsert && insertComponentInstance(c.id, { x: 40, y: 40 })}
           >
             <span className="palette-icon">▤</span>
             <span className="palette-label grow">{c.name}</span>
+            <button
+              className="icon-btn"
+              title={t.editComponent}
+              onClick={(e) => {
+                e.stopPropagation()
+                editComponent(c.id)
+              }}
+            >
+              ✎
+            </button>
             <button
               className="icon-btn"
               title={t.delete}

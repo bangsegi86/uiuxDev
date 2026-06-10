@@ -3,9 +3,10 @@ import {
   type AuthResponse,
   type CustomComponent,
   type DeviceKind,
+  type Frame,
   type NodeInstance,
   type Project,
-  type Screen,
+  type ScreenDoc,
   type Template,
   type TreeNode,
   type User
@@ -65,14 +66,18 @@ export const api = {
     http<void>('DELETE', routes.treeNode(projectId, nodeId)),
 
   getScreen: (projectId: string, screenId: string) =>
-    http<Screen>('GET', routes.screen(projectId, screenId)),
-  saveScreen: (projectId: string, screenId: string, patch: Partial<Screen>) =>
-    http<Screen>('PUT', routes.screen(projectId, screenId), patch),
+    http<ScreenDoc>('GET', routes.screen(projectId, screenId)),
+  saveScreen: (projectId: string, screenId: string, patch: Partial<ScreenDoc>) =>
+    http<ScreenDoc>('PUT', routes.screen(projectId, screenId), patch),
+  saveFrame: (projectId: string, screenId: string, frameId: string, patch: Partial<Frame>) =>
+    http<Frame>('PUT', routes.frame(projectId, screenId, frameId), patch),
 
   listComponents: (projectId: string) =>
     http<CustomComponent[]>('GET', routes.components(projectId)),
   createComponent: (projectId: string, name: string, definition: NodeInstance) =>
     http<CustomComponent>('POST', routes.components(projectId), { name, definition }),
+  updateComponent: (projectId: string, id: string, name: string, definition: NodeInstance) =>
+    http<CustomComponent>('PUT', routes.component(projectId, id), { name, definition }),
   deleteComponent: (projectId: string, id: string) =>
     http<void>('DELETE', routes.component(projectId, id)),
 

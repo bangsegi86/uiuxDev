@@ -3,12 +3,15 @@ import { nanoid } from 'nanoid'
 import {
   createInstance,
   DEVICE_FRAMES,
+  emptyFrame,
+  type Connector,
   type CustomComponent,
   type DeviceKind,
+  type Frame,
   type Layout,
   type NodeInstance,
   type Project,
-  type Screen,
+  type ScreenDoc,
   type Template,
   type TreeNode
 } from '@uiux/shared'
@@ -29,6 +32,13 @@ import {
 
 export type AlignKind = 'left' | 'centerH' | 'right' | 'top' | 'middle' | 'bottom'
 export type DistributeKind = 'horizontal' | 'vertical'
+export type EditorView = 'edit' | 'board'
+
+/** Draft used by the component editor (a component's definition root). */
+export interface ComponentDraft {
+  id: string | null // existing component id, or null for a new one
+  name: string
+}
 
 interface EditorState {
   // workspace
@@ -38,49 +48,64 @@ interface EditorState {
   components: CustomComponent[]
   templates: Template[]
 
-  // active screen
-  screen: Screen | null
+  // active document + editing context
+  doc: ScreenDoc | null
+  activeFrameId: string | null
+  view: EditorView
+  componentDraft: ComponentDraft | null
+  /** Working root of the component editor (when componentDraft is set). */
+  draftRoot: NodeInstance | null
+
+  // canvas working state (applies to the active surface)
   selection: string[]
-  clipboard: { parentId: string; nodes: NodeInstance[] } | null
+  clipboard: { nodes: NodeInstance[] } | null
   zoom: number
   saving: boolean
   dirty: boolean
   notesOpen: boolean
-
-  // history (undo/redo) — snapshots of the whole screen
-  past: Screen[]
-  future: Screen[]
+  past: NodeInstance[]
+  future: NodeInstance[]
 
   // collaboration
   collaborators: { id: string; email: string }[]
-  setCollaborators: (c: { id: string; email: string }[]) => void
-  applyRemoteRoot: (root: NodeInstance) => void
-  // live cursors of other users, keyed by user id (canvas-space coords)
   remoteCursors: Record<string, { email: string; x: number; y: number }>
-  setRemoteCursor: (id: string, data: { email: string; x: number; y: number }) => void
-  pruneCursors: (presentIds: string[]) => void
 
-  // workspace actions
+  // --- workspace ---
   loadProjects: () => Promise<Project[]>
   openProject: (id: string) => Promise<void>
   createProject: (name: string) => Promise<Project>
   refreshTree: () => Promise<void>
-  createNode: (
-    type: 'folder' | 'screen',
-    name: string,
-    parentId: string | null,
-    device?: DeviceKind
-  ) => Promise<void>
+  createNode: (type: 'folder' | 'screen', name: string, parentId: string | null, device?: DeviceKind) => Promise<void>
   renameNode: (nodeId: string, name: string) => Promise<void>
   deleteNode: (nodeId: string) => Promise<void>
   openScreen: (screenId: string) => Promise<void>
 
-  // history actions
+  // --- frames / board ---
+  setActiveFrame: (frameId: string) => void
+  addFrame: (device: DeviceKind) => void
+  renameFrame: (frameId: string, name: string) => void
+  deleteFrame: (frameId: string) => void
+  setFrameDevice: (device: DeviceKind) => void
+  moveFrameOnBoard: (frameId: string, x: number, y: number) => void
+  setView: (view: EditorView) => void
+  addConnector: (from: string, to: string) => void
+  updateConnector: (id: string, patch: Partial<Connector>) => void
+  deleteConnector: (id: string) => void
+
+  // --- component editor ---
+  newComponent: () => void
+  editComponent: (componentId: string) => void
+  editComponentFromSelection: () => void
+  setDraftName: (name: string) => void
+  closeComponentEditor: () => void
+  saveComponentDraft: () => Promise<void>
+
+  // --- history ---
   checkpoint: () => void
   undo: () => void
   redo: () => void
 
-  // canvas actions
+  // --- canvas actions (operate on the active surface root) ---
   setSelection: (ids: string[]) => void
   toggleSelection: (id: string) => void
   insertPrimitive: (type: string, at: { x: number; y: number }, parentId?: string) => void
@@ -98,21 +123,50 @@ interface EditorState {
   align: (kind: AlignKind) => void
   distribute: (kind: DistributeKind) => void
 
-  // device / notes
-  setDevice: (device: DeviceKind) => void
+  // --- device / notes / zoom ---
   setZoom: (zoom: number) => void
   setNotes: (notes: string) => void
   toggleNotes: () => void
 
-  // library
-  saveAsComponent: (name: string) => Promise<void>
+  // --- library ---
   deleteComponent: (id: string) => Promise<void>
   saveAsTemplate: (name: string) => Promise<void>
   applyTemplate: (template: Template) => void
   deleteTemplate: (id: string) => Promise<void>
 
-  // persistence
+  // --- persistence ---
   saveScreen: () => Promise<void>
+
+  // --- internal surface helpers ---
+  getRoot: () => NodeInstance | null
+  setRoot: (root: NodeInstance) => void
+
+  // --- collaboration ---
+  setCollaborators: (c: { id: string; email: string }[]) => void
+  applyRemoteRoot: (frameId: string, root: NodeInstance) => void
+  setRemoteCursor: (id: string, data: { email: string; x: number; y: number }) => void
+  pruneCursors: (presentIds: string[]) => void
+}
+
+/** The active frame, if any (and not in the component editor). */
+function activeFrame(s: EditorState): Frame | null {
+  if (!s.doc || !s.activeFrameId) return null
+  return s.doc.frames.find((f) => f.id === s.activeFrameId) ?? null
+}
+
+/** Selector: the root currently being edited (component draft or active frame). */
+export function selectRoot(s: EditorState): NodeInstance | null {
+  if (s.componentDraft) return s.draftRoot
+  return activeFrame(s)?.root ?? null
+}
+
+/** Selector: the size/device of the active surface for the canvas frame. */
+export function selectSurface(s: EditorState): { width: number; height: number; device: DeviceKind } | null {
+  if (s.componentDraft && s.draftRoot) {
+    return { width: s.draftRoot.layout.w, height: s.draftRoot.layout.h, device: 'pc' }
+  }
+  const f = activeFrame(s)
+  return f ? { width: f.canvas.width, height: f.canvas.height, device: f.device } : null
 }
 
 export const useEditor = create<EditorState>((set, get) => ({
@@ -121,7 +175,11 @@ export const useEditor = create<EditorState>((set, get) => ({
   tree: [],
   components: [],
   templates: [],
-  screen: null,
+  doc: null,
+  activeFrameId: null,
+  view: 'edit',
+  componentDraft: null,
+  draftRoot: null,
   selection: [],
   clipboard: null,
   zoom: 1,
@@ -131,66 +189,36 @@ export const useEditor = create<EditorState>((set, get) => ({
   past: [],
   future: [],
   collaborators: [],
-
-  setCollaborators: (c) => set({ collaborators: c }),
-
   remoteCursors: {},
-  setRemoteCursor: (id, data) =>
-    set((s) => ({ remoteCursors: { ...s.remoteCursors, [id]: data } })),
-  pruneCursors: (presentIds) =>
-    set((s) => {
-      const next: Record<string, { email: string; x: number; y: number }> = {}
-      for (const [id, cur] of Object.entries(s.remoteCursors)) {
-        if (presentIds.includes(id)) next[id] = cur
-      }
-      return { remoteCursors: next }
-    }),
 
-  // Apply a screen-tree update received from a collaborator (no history entry).
-  applyRemoteRoot: (root) => {
-    const { screen } = get()
-    if (!screen) return
-    set({ screen: { ...screen, root }, dirty: true })
+  // --- surface helpers ---
+  getRoot: () => selectRoot(get()),
+  setRoot: (root) => {
+    const s = get()
+    if (s.componentDraft) {
+      set({ draftRoot: root, dirty: true })
+    } else if (s.doc && s.activeFrameId) {
+      const frames = s.doc.frames.map((f) => (f.id === s.activeFrameId ? { ...f, root } : f))
+      set({ doc: { ...s.doc, frames }, dirty: true })
+    }
   },
 
-  // Snapshot the current screen before an edit gesture so it can be undone.
-  // Consecutive calls with no intervening change are de-duplicated by reference.
-  checkpoint: () => {
-    const { screen, past } = get()
-    if (!screen) return
-    if (past[past.length - 1] === screen) return
-    set({ past: [...past, screen].slice(-50), future: [] })
-  },
-
-  undo: () => {
-    const { past, future, screen } = get()
-    if (!past.length || !screen) return
-    const prev = past[past.length - 1]
-    set({ screen: prev, past: past.slice(0, -1), future: [screen, ...future], selection: [], dirty: true })
-  },
-
-  redo: () => {
-    const { past, future, screen } = get()
-    if (!future.length || !screen) return
-    const next = future[0]
-    set({ screen: next, future: future.slice(1), past: [...past, screen], selection: [], dirty: true })
-  },
-
+  // --- workspace ---
   loadProjects: async () => api.listProjects(),
 
   openProject: async (id) => {
     const { project, tree } = await api.getProject(id)
-    const [components, templates] = await Promise.all([
-      api.listComponents(id),
-      api.listTemplates(id)
-    ])
+    const [components, templates] = await Promise.all([api.listComponents(id), api.listTemplates(id)])
     set({
       projectId: id,
       projectName: project.name,
       tree,
       components,
       templates,
-      screen: null,
+      doc: null,
+      activeFrameId: null,
+      componentDraft: null,
+      draftRoot: null,
       selection: []
     })
   },
@@ -223,23 +251,193 @@ export const useEditor = create<EditorState>((set, get) => ({
   },
 
   deleteNode: async (nodeId) => {
-    const { projectId, tree, screen } = get()
+    const { projectId, tree, doc } = get()
     if (!projectId) return
     const node = tree.find((n) => n.id === nodeId)
     await api.deleteTreeNode(projectId, nodeId)
     await get().refreshTree()
-    if (node?.type === 'screen' && node.screenId === screen?.id) {
-      set({ screen: null, selection: [] })
+    if (node?.type === 'screen' && node.screenId === doc?.id) {
+      set({ doc: null, activeFrameId: null, selection: [] })
     }
   },
 
   openScreen: async (screenId) => {
     const { projectId } = get()
     if (!projectId) return
-    const screen = await api.getScreen(projectId, screenId)
-    set({ screen, selection: [], dirty: false, past: [], future: [], remoteCursors: {} })
+    const doc = await api.getScreen(projectId, screenId)
+    set({
+      doc,
+      activeFrameId: doc.frames[0]?.id ?? null,
+      view: 'edit',
+      componentDraft: null,
+      draftRoot: null,
+      selection: [],
+      dirty: false,
+      past: [],
+      future: [],
+      remoteCursors: {}
+    })
   },
 
+  // --- frames / board ---
+  setActiveFrame: (frameId) =>
+    set({ activeFrameId: frameId, view: 'edit', selection: [], past: [], future: [] }),
+
+  addFrame: (device) => {
+    const { doc } = get()
+    if (!doc) return
+    const offset = doc.frames.length
+    const frame = emptyFrame(nanoid(10), `Screen ${doc.frames.length + 1}`, device, {
+      x: 80 + offset * 60,
+      y: 80 + offset * 40
+    })
+    set({ doc: { ...doc, frames: [...doc.frames, frame] }, activeFrameId: frame.id, view: 'edit', dirty: true, selection: [], past: [], future: [] })
+  },
+
+  renameFrame: (frameId, name) => {
+    const { doc } = get()
+    if (!doc) return
+    set({ doc: { ...doc, frames: doc.frames.map((f) => (f.id === frameId ? { ...f, name } : f)) }, dirty: true })
+  },
+
+  deleteFrame: (frameId) => {
+    const { doc, activeFrameId } = get()
+    if (!doc || doc.frames.length <= 1) return
+    const frames = doc.frames.filter((f) => f.id !== frameId)
+    const connectors = doc.connectors.filter((c) => c.from !== frameId && c.to !== frameId)
+    const nextActive = activeFrameId === frameId ? frames[0]?.id ?? null : activeFrameId
+    set({ doc: { ...doc, frames, connectors }, activeFrameId: nextActive, dirty: true, selection: [] })
+  },
+
+  setFrameDevice: (device) => {
+    const { doc, activeFrameId } = get()
+    if (!doc || !activeFrameId) return
+    get().checkpoint()
+    const f = DEVICE_FRAMES[device]
+    const frames = doc.frames.map((fr) =>
+      fr.id === activeFrameId
+        ? {
+            ...fr,
+            device,
+            canvas: { width: f.width, height: f.height },
+            root: { ...fr.root, layout: { ...fr.root.layout, w: f.width, h: f.height } }
+          }
+        : fr
+    )
+    set({ doc: { ...doc, frames }, dirty: true })
+  },
+
+  moveFrameOnBoard: (frameId, x, y) => {
+    const { doc } = get()
+    if (!doc) return
+    set({ doc: { ...doc, frames: doc.frames.map((f) => (f.id === frameId ? { ...f, board: { x, y } } : f)) }, dirty: true })
+  },
+
+  setView: (view) => set({ view, selection: [] }),
+
+  addConnector: (from, to) => {
+    const { doc } = get()
+    if (!doc || from === to) return
+    if (doc.connectors.some((c) => c.from === from && c.to === to)) return
+    set({ doc: { ...doc, connectors: [...doc.connectors, { id: nanoid(8), from, to }] }, dirty: true })
+  },
+
+  updateConnector: (id, patch) => {
+    const { doc } = get()
+    if (!doc) return
+    set({ doc: { ...doc, connectors: doc.connectors.map((c) => (c.id === id ? { ...c, ...patch } : c)) }, dirty: true })
+  },
+
+  deleteConnector: (id) => {
+    const { doc } = get()
+    if (!doc) return
+    set({ doc: { ...doc, connectors: doc.connectors.filter((c) => c.id !== id) }, dirty: true })
+  },
+
+  // --- component editor ---
+  newComponent: () => {
+    const root: NodeInstance = {
+      id: 'root',
+      type: 'container',
+      props: {},
+      style: { background: '#ffffff' },
+      layout: { x: 0, y: 0, w: 400, h: 300 },
+      children: []
+    }
+    set({ componentDraft: { id: null, name: '' }, draftRoot: root, selection: [], past: [], future: [] })
+  },
+
+  editComponent: (componentId) => {
+    const comp = get().components.find((c) => c.id === componentId)
+    if (!comp) return
+    set({
+      componentDraft: { id: comp.id, name: comp.name },
+      draftRoot: cloneWithNewIds(comp.definition),
+      selection: [],
+      past: [],
+      future: []
+    })
+  },
+
+  editComponentFromSelection: () => {
+    const root = get().getRoot()
+    const { selection } = get()
+    if (!root || !selection.length) return
+    const items = selection.map((id) => findNode(root, id)?.node).filter(Boolean) as NodeInstance[]
+    const def = groupIntoDefinition(items)
+    set({ componentDraft: { id: null, name: '' }, draftRoot: def, selection: [], past: [], future: [] })
+  },
+
+  setDraftName: (name) => {
+    const d = get().componentDraft
+    if (d) set({ componentDraft: { ...d, name } })
+  },
+
+  closeComponentEditor: () =>
+    set({ componentDraft: null, draftRoot: null, selection: [], past: [], future: [] }),
+
+  saveComponentDraft: async () => {
+    const { projectId, componentDraft, draftRoot } = get()
+    if (!projectId || !componentDraft || !draftRoot) return
+    const name = componentDraft.name.trim() || 'Component'
+    if (componentDraft.id) {
+      const updated = await api.updateComponent(projectId, componentDraft.id, name, draftRoot)
+      set((s) => ({ components: s.components.map((c) => (c.id === updated.id ? updated : c)) }))
+    } else {
+      const created = await api.createComponent(projectId, name, draftRoot)
+      set((s) => ({ components: [...s.components, created] }))
+    }
+    get().closeComponentEditor()
+  },
+
+  // --- history ---
+  checkpoint: () => {
+    const root = get().getRoot()
+    const { past } = get()
+    if (!root) return
+    if (past[past.length - 1] === root) return
+    set({ past: [...past, root].slice(-50), future: [] })
+  },
+
+  undo: () => {
+    const { past, future } = get()
+    const root = get().getRoot()
+    if (!past.length || !root) return
+    const prev = past[past.length - 1]
+    get().setRoot(prev)
+    set({ past: past.slice(0, -1), future: [root, ...future], selection: [] })
+  },
+
+  redo: () => {
+    const { past, future } = get()
+    const root = get().getRoot()
+    if (!future.length || !root) return
+    const next = future[0]
+    get().setRoot(next)
+    set({ future: future.slice(1), past: [...past, root], selection: [] })
+  },
+
+  // --- canvas actions ---
   setSelection: (ids) => set({ selection: ids }),
   toggleSelection: (id) =>
     set((s) =>
@@ -249,35 +447,27 @@ export const useEditor = create<EditorState>((set, get) => ({
     ),
 
   insertPrimitive: (type, at, parentId = 'root') => {
-    const { screen } = get()
-    if (!screen) return
+    const root = get().getRoot()
+    if (!root) return
     get().checkpoint()
     const inst = createInstance(type, nanoid(10), at)
-    set({
-      screen: { ...screen, root: insertChildren(screen.root, parentId, [inst]) },
-      selection: [inst.id],
-      dirty: true
-    })
+    get().setRoot(insertChildren(root, parentId, [inst]))
+    set({ selection: [inst.id] })
   },
 
   insertDefinition: (def, at, parentId = 'root') => {
-    const { screen } = get()
-    if (!screen) return
+    const root = get().getRoot()
+    if (!root) return
     get().checkpoint()
     const instances = expandDefinition(def, at)
-    set({
-      screen: { ...screen, root: insertChildren(screen.root, parentId, instances) },
-      selection: instances.map((i) => i.id),
-      dirty: true
-    })
+    get().setRoot(insertChildren(root, parentId, instances))
+    set({ selection: instances.map((i) => i.id) })
   },
 
-  /** Insert a *linked* custom-component instance (renders live from its definition). */
   insertComponentInstance: (componentId, at, parentId = 'root') => {
-    const { screen, components } = get()
-    if (!screen) return
-    const comp = components.find((c) => c.id === componentId)
-    if (!comp) return
+    const root = get().getRoot()
+    const comp = get().components.find((c) => c.id === componentId)
+    if (!root || !comp) return
     get().checkpoint()
     const inst: NodeInstance = {
       id: nanoid(10),
@@ -287,20 +477,16 @@ export const useEditor = create<EditorState>((set, get) => ({
       layout: { x: at.x, y: at.y, w: comp.definition.layout.w, h: comp.definition.layout.h },
       children: []
     }
-    set({
-      screen: { ...screen, root: insertChildren(screen.root, parentId, [inst]) },
-      selection: [inst.id],
-      dirty: true
-    })
+    get().setRoot(insertChildren(root, parentId, [inst]))
+    set({ selection: [inst.id] })
   },
 
-  /** Break a linked instance into editable primitives at its position/scale. */
   detachComponentInstance: (id) => {
-    const { screen, components } = get()
-    if (!screen) return
-    const found = findNode(screen.root, id)
+    const root = get().getRoot()
+    if (!root) return
+    const found = findNode(root, id)
     if (!found || !found.node.type.startsWith('custom:')) return
-    const comp = components.find((c) => c.id === found.node.type.slice('custom:'.length))
+    const comp = get().components.find((c) => c.id === found.node.type.slice('custom:'.length))
     if (!comp) return
     get().checkpoint()
     const sx = found.node.layout.w / (comp.definition.layout.w || 1)
@@ -318,96 +504,67 @@ export const useEditor = create<EditorState>((set, get) => ({
         }
       }
     })
-    let root = removeNodes(screen.root, new Set([id]))
-    root = insertChildren(root, parentId, expanded)
-    set({ screen: { ...screen, root }, selection: expanded.map((e) => e.id), dirty: true })
+    let next = removeNodes(root, new Set([id]))
+    next = insertChildren(next, parentId, expanded)
+    get().setRoot(next)
+    set({ selection: expanded.map((e) => e.id) })
   },
 
   updateLayout: (id, patch) => {
-    const { screen } = get()
-    if (!screen) return
-    set({
-      screen: {
-        ...screen,
-        root: updateNode(screen.root, id, (n) => ({ ...n, layout: { ...n.layout, ...patch } }))
-      },
-      dirty: true
-    })
+    const root = get().getRoot()
+    if (!root) return
+    get().setRoot(updateNode(root, id, (n) => ({ ...n, layout: { ...n.layout, ...patch } })))
   },
 
   updateProp: (id, key, value) => {
-    const { screen } = get()
-    if (!screen) return
-    set({
-      screen: {
-        ...screen,
-        root: updateNode(screen.root, id, (n) => ({ ...n, props: { ...n.props, [key]: value } }))
-      },
-      dirty: true
-    })
+    const root = get().getRoot()
+    if (!root) return
+    get().setRoot(updateNode(root, id, (n) => ({ ...n, props: { ...n.props, [key]: value } })))
   },
 
   updateStyle: (id, key, value) => {
-    const { screen } = get()
-    if (!screen) return
-    set({
-      screen: {
-        ...screen,
-        root: updateNode(screen.root, id, (n) => ({ ...n, style: { ...n.style, [key]: value } }))
-      },
-      dirty: true
-    })
+    const root = get().getRoot()
+    if (!root) return
+    get().setRoot(updateNode(root, id, (n) => ({ ...n, style: { ...n.style, [key]: value } })))
   },
 
-  /** Re-parent a single node into the deepest container under a canvas point. */
   reparent: (id, absPoint) => {
-    const { screen } = get()
-    if (!screen) return
-    const found = findNode(screen.root, id)
+    const root = get().getRoot()
+    if (!root) return
+    const found = findNode(root, id)
     if (!found) return
     const exclude = new Set<string>([id, ...descendantIds(found.node)])
-    const target = deepestContainerAt(screen.root, absPoint.x, absPoint.y, exclude)
+    const target = deepestContainerAt(root, absPoint.x, absPoint.y, exclude)
     const currentParentId = found.parent?.id ?? 'root'
     if (target.id === currentParentId) return
-    // Absolute origin of the node, converted into the new parent's frame.
-    const abs = absoluteOrigin(screen.root, id)!
+    const abs = absoluteOrigin(root, id)!
     const newLayout = { ...found.node.layout, x: abs.x - target.originX, y: abs.y - target.originY }
     get().checkpoint()
     const detached = { ...found.node, layout: newLayout }
-    let root = removeNodes(screen.root, new Set([id]))
-    root = insertChildren(root, target.id, [detached])
-    set({ screen: { ...screen, root }, dirty: true })
+    let next = removeNodes(root, new Set([id]))
+    next = insertChildren(next, target.id, [detached])
+    get().setRoot(next)
   },
 
   copy: () => {
-    const { screen, selection } = get()
-    if (!screen || !selection.length) return
-    const nodes: NodeInstance[] = []
-    let parentId = 'root'
-    for (const sid of selection) {
-      const f = findNode(screen.root, sid)
-      if (f) {
-        nodes.push(f.node)
-        parentId = f.parent?.id ?? 'root'
-      }
-    }
-    if (nodes.length) set({ clipboard: { parentId, nodes } })
+    const root = get().getRoot()
+    const { selection } = get()
+    if (!root || !selection.length) return
+    const nodes = selection.map((id) => findNode(root, id)?.node).filter(Boolean) as NodeInstance[]
+    if (nodes.length) set({ clipboard: { nodes } })
   },
 
   paste: () => {
-    const { screen, clipboard } = get()
-    if (!screen || !clipboard?.nodes.length) return
+    const root = get().getRoot()
+    const { clipboard } = get()
+    if (!root || !clipboard?.nodes.length) return
     get().checkpoint()
     const clones = clipboard.nodes.map((c) => {
       const copy = cloneWithNewIds(c)
       return { ...copy, layout: { ...copy.layout, x: copy.layout.x + 24, y: copy.layout.y + 24 } }
     })
-    const target = findNode(screen.root, clipboard.parentId) ? clipboard.parentId : 'root'
-    set({
-      screen: { ...screen, root: insertChildren(screen.root, target, clones) },
-      selection: clones.map((c) => c.id),
-      dirty: true
-    })
+    get().setRoot(insertChildren(root, 'root', clones))
+    set({ selection: clones.map((c) => c.id) })
   },
 
   duplicate: () => {
@@ -416,21 +573,19 @@ export const useEditor = create<EditorState>((set, get) => ({
   },
 
   remove: () => {
-    const { screen, selection } = get()
-    if (!screen || !selection.length) return
+    const root = get().getRoot()
+    const { selection } = get()
+    if (!root || !selection.length) return
     get().checkpoint()
-    set({
-      screen: { ...screen, root: removeNodes(screen.root, new Set(selection)) },
-      selection: [],
-      dirty: true
-    })
+    get().setRoot(removeNodes(root, new Set(selection)))
+    set({ selection: [] })
   },
 
   align: (kind) => {
-    const { screen, selection } = get()
-    if (!screen || selection.length < 2) return
-    const found = selection.map((id) => findNode(screen.root, id)).filter(Boolean) as { node: NodeInstance; parent: NodeInstance | null }[]
-    // Alignment is only meaningful among siblings (same parent frame).
+    const root = get().getRoot()
+    const { selection } = get()
+    if (!root || selection.length < 2) return
+    const found = selection.map((id) => findNode(root, id)).filter(Boolean) as { node: NodeInstance; parent: NodeInstance | null }[]
     const parentIds = new Set(found.map((f) => f.parent?.id ?? 'root'))
     if (parentIds.size !== 1) return
     get().checkpoint()
@@ -452,15 +607,16 @@ export const useEditor = create<EditorState>((set, get) => ({
           return { y: box.y + (box.h - n.layout.h) / 2 }
       }
     }
-    let root = screen.root
-    for (const n of items) root = updateNode(root, n.id, (x) => ({ ...x, layout: { ...x.layout, ...newLayout(x) } }))
-    set({ screen: { ...screen, root }, dirty: true })
+    let next = root
+    for (const n of items) next = updateNode(next, n.id, (x) => ({ ...x, layout: { ...x.layout, ...newLayout(x) } }))
+    get().setRoot(next)
   },
 
   distribute: (kind) => {
-    const { screen, selection } = get()
-    if (!screen || selection.length < 3) return
-    const found = selection.map((id) => findNode(screen.root, id)).filter(Boolean) as { node: NodeInstance; parent: NodeInstance | null }[]
+    const root = get().getRoot()
+    const { selection } = get()
+    if (!root || selection.length < 3) return
+    const found = selection.map((id) => findNode(root, id)).filter(Boolean) as { node: NodeInstance; parent: NodeInstance | null }[]
     const parentIds = new Set(found.map((f) => f.parent?.id ?? 'root'))
     if (parentIds.size !== 1) return
     get().checkpoint()
@@ -468,55 +624,29 @@ export const useEditor = create<EditorState>((set, get) => ({
       .map((f) => f.node)
       .sort((a, b) => (kind === 'horizontal' ? a.layout.x - b.layout.x : a.layout.y - b.layout.y))
     const start = kind === 'horizontal' ? items[0].layout.x : items[0].layout.y
-    const end =
-      kind === 'horizontal' ? items[items.length - 1].layout.x : items[items.length - 1].layout.y
+    const end = kind === 'horizontal' ? items[items.length - 1].layout.x : items[items.length - 1].layout.y
     const step = (end - start) / (items.length - 1)
-    let root = screen.root
+    let next = root
     items.forEach((it, i) => {
       const v = start + step * i
-      root = updateNode(root, it.id, (x) => ({
+      next = updateNode(next, it.id, (x) => ({
         ...x,
         layout: kind === 'horizontal' ? { ...x.layout, x: v } : { ...x.layout, y: v }
       }))
     })
-    set({ screen: { ...screen, root }, dirty: true })
+    get().setRoot(next)
   },
 
-  setDevice: (device) => {
-    const { screen } = get()
-    if (!screen) return
-    get().checkpoint()
-    const frame = DEVICE_FRAMES[device]
-    set({
-      screen: {
-        ...screen,
-        device,
-        canvas: { width: frame.width, height: frame.height },
-        root: { ...screen.root, layout: { ...screen.root.layout, w: frame.width, h: frame.height } }
-      },
-      dirty: true
-    })
-  },
-
+  // --- device / notes / zoom ---
   setZoom: (zoom) => set({ zoom }),
   setNotes: (notes) => {
-    const { screen } = get()
-    if (!screen) return
-    set({ screen: { ...screen, notes }, dirty: true })
+    const { doc } = get()
+    if (!doc) return
+    set({ doc: { ...doc, notes }, dirty: true })
   },
   toggleNotes: () => set((s) => ({ notesOpen: !s.notesOpen })),
 
-  saveAsComponent: async (name) => {
-    const { projectId, screen, selection } = get()
-    if (!projectId || !screen || !selection.length) return
-    const items = selection
-      .map((id) => findNode(screen.root, id)?.node)
-      .filter(Boolean) as NodeInstance[]
-    const def = groupIntoDefinition(items)
-    const component = await api.createComponent(projectId, name, def)
-    set((s) => ({ components: [...s.components, component] }))
-  },
-
+  // --- library ---
   deleteComponent: async (id) => {
     const { projectId } = get()
     if (!projectId) return
@@ -525,22 +655,21 @@ export const useEditor = create<EditorState>((set, get) => ({
   },
 
   saveAsTemplate: async (name) => {
-    const { projectId, screen } = get()
-    if (!projectId || !screen) return
-    const template = await api.createTemplate(projectId, name, screen.device, screen.root)
+    const { projectId } = get()
+    const root = get().getRoot()
+    const surface = selectSurface(get())
+    if (!projectId || !root || !surface) return
+    const template = await api.createTemplate(projectId, name, surface.device, root)
     set((s) => ({ templates: [...s.templates, template] }))
   },
 
   applyTemplate: (template) => {
-    const { screen } = get()
-    if (!screen) return
+    const root = get().getRoot()
+    if (!root) return
     get().checkpoint()
     const children = template.definition.children.map(cloneWithNewIds)
-    set({
-      screen: { ...screen, root: { ...screen.root, children } },
-      selection: [],
-      dirty: true
-    })
+    get().setRoot({ ...root, children })
+    set({ selection: [] })
   },
 
   deleteTemplate: async (id) => {
@@ -550,21 +679,36 @@ export const useEditor = create<EditorState>((set, get) => ({
     set((s) => ({ templates: s.templates.filter((t) => t.id !== id) }))
   },
 
+  // --- persistence ---
   saveScreen: async () => {
-    const { projectId, screen } = get()
-    if (!projectId || !screen) return
+    const { projectId, doc } = get()
+    if (!projectId || !doc) return
     set({ saving: true })
     try {
-      await api.saveScreen(projectId, screen.id, {
-        name: screen.name,
-        device: screen.device,
-        canvas: screen.canvas,
-        root: screen.root,
-        notes: screen.notes
+      await api.saveScreen(projectId, doc.id, {
+        name: doc.name,
+        notes: doc.notes,
+        frames: doc.frames,
+        connectors: doc.connectors
       })
       set({ dirty: false })
     } finally {
       set({ saving: false })
     }
-  }
+  },
+
+  // --- collaboration ---
+  setCollaborators: (c) => set({ collaborators: c }),
+  applyRemoteRoot: (frameId, root) => {
+    const { doc } = get()
+    if (!doc) return
+    set({ doc: { ...doc, frames: doc.frames.map((f) => (f.id === frameId ? { ...f, root } : f)) }, dirty: true })
+  },
+  setRemoteCursor: (id, data) => set((s) => ({ remoteCursors: { ...s.remoteCursors, [id]: data } })),
+  pruneCursors: (presentIds) =>
+    set((s) => {
+      const next: Record<string, { email: string; x: number; y: number }> = {}
+      for (const [id, cur] of Object.entries(s.remoteCursors)) if (presentIds.includes(id)) next[id] = cur
+      return { remoteCursors: next }
+    })
 }))

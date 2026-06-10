@@ -1,6 +1,6 @@
 import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { isContainerType, type Layout, type NodeInstance } from '@uiux/shared'
-import { useEditor } from '../../state/editorStore'
+import { selectRoot, selectSurface, useEditor } from '../../state/editorStore'
 import { absoluteOrigin } from '../../state/tree'
 import { sendCursor } from '../../lib/collabBus'
 import { renderPrimitive, renderStaticTree } from '../../componentRegistry'
@@ -55,7 +55,8 @@ type Interaction =
 const HANDLES = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'] as const
 
 export function Canvas() {
-  const screen = useEditor((s) => s.screen)
+  const root = useEditor(selectRoot)
+  const surface = useEditor(selectSurface)
   const selection = useEditor((s) => s.selection)
   const zoom = useEditor((s) => s.zoom)
   const setSelection = useEditor((s) => s.setSelection)
@@ -71,8 +72,8 @@ export function Canvas() {
   const lastCursorSent = useRef(0)
   const [it, setIt] = useState<Interaction>({ mode: 'idle' })
 
-  if (!screen) return null
-  const { width, height } = screen.canvas
+  if (!root || !surface) return null
+  const { width, height } = surface
 
   /** Convert a client point to canvas-space (root frame) coordinates. */
   const toCanvas = (clientX: number, clientY: number) => {
@@ -98,7 +99,7 @@ export function Canvas() {
       if (sel.includes(n.id)) origin[n.id] = { ...n.layout }
       n.children.forEach(collect)
     }
-    screen.root.children.forEach(collect)
+    root.children.forEach(collect)
     checkpoint()
     setIt({ mode: 'move', startX: x, startY: y, origin, singleId: sel.length === 1 ? node.id : undefined })
     ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
@@ -165,7 +166,7 @@ export function Canvas() {
       const y1 = Math.min(it.startY, it.y)
       const x2 = Math.max(it.startX, it.x)
       const y2 = Math.max(it.startY, it.y)
-      const hit = screen.root.children
+      const hit = root.children
         .filter(
           (c) =>
             c.layout.x < x2 &&
@@ -177,9 +178,9 @@ export function Canvas() {
       setSelection(hit)
     } else if (it.mode === 'move' && it.singleId) {
       // Re-parent into the container the node now sits over (by its center).
-      const cur = useEditor.getState().screen
+      const cur = useEditor.getState().getRoot()
       if (cur) {
-        const origin = absoluteOrigin(cur.root, it.singleId)
+        const origin = absoluteOrigin(cur, it.singleId)
         const node = it.origin[it.singleId]
         if (origin && node) {
           reparent(it.singleId, { x: origin.x + node.w / 2, y: origin.y + node.h / 2 })
@@ -258,7 +259,7 @@ export function Canvas() {
         onDragOver={(e) => e.preventDefault()}
         onDrop={(e) => onDropInto(e, 'root')}
       >
-        {screen.root.children.map(renderNode)}
+        {root.children.map(renderNode)}
         {marquee && (
           <div
             className="marquee"

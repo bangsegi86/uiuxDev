@@ -61,7 +61,25 @@ export const ko = {
   password: '비밀번호',
   loginFailed: '로그인 실패. 이메일/비밀번호를 확인하세요.',
   registerFailed: '회원가입 실패. 이미 등록된 이메일일 수 있습니다.',
-  editing: '명 편집 중'
+  editing: '명 편집 중',
+  newComponent: '새 컴포넌트',
+  editComponent: '컴포넌트 편집',
+  componentEditor: '컴포넌트 편집기',
+  cancel: '취소',
+  editView: '편집',
+  boardView: '보드',
+  connect: '연결선 그리기',
+  grid: '그리드(표)',
+  columnTitle: '열 제목',
+  width: '너비',
+  colSpan: '열 병합(span)',
+  addColumn: '열 추가',
+  rows: '행 수',
+  addRow: '행 추가',
+  removeRow: '행 삭제',
+  editAsJson: 'JSON으로 편집',
+  apply: '적용',
+  invalidJson: '올바르지 않은 JSON입니다'
 }
 
 export type Strings = typeof ko
@@ -128,7 +146,25 @@ export const en: Strings = {
   password: 'Password',
   loginFailed: 'Login failed. Check your email/password.',
   registerFailed: 'Sign up failed. The email may already be registered.',
-  editing: 'editing'
+  editing: 'editing',
+  newComponent: 'New component',
+  editComponent: 'Edit component',
+  componentEditor: 'Component editor',
+  cancel: 'Cancel',
+  editView: 'Edit',
+  boardView: 'Board',
+  connect: 'Draw connector',
+  grid: 'Grid (table)',
+  columnTitle: 'Column title',
+  width: 'Width',
+  colSpan: 'Column span',
+  addColumn: 'Add column',
+  rows: 'Rows',
+  addRow: 'Add row',
+  removeRow: 'Remove row',
+  editAsJson: 'Edit as JSON',
+  apply: 'Apply',
+  invalidJson: 'Invalid JSON'
 }
 
 export const dictionaries = { ko, en }

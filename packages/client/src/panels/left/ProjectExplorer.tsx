@@ -8,7 +8,7 @@ export function ProjectExplorer() {
   const projectId = useEditor((s) => s.projectId)
   const projectName = useEditor((s) => s.projectName)
   const tree = useEditor((s) => s.tree)
-  const screen = useEditor((s) => s.screen)
+  const doc = useEditor((s) => s.doc)
   const loadProjects = useEditor((s) => s.loadProjects)
   const openProject = useEditor((s) => s.openProject)
   const createProject = useEditor((s) => s.createProject)
@@ -63,7 +63,7 @@ export function ProjectExplorer() {
     childrenOf(parentId).map((node) => (
       <div key={node.id}>
         <div
-          className={`tree-row${screen?.id === node.screenId && node.type === 'screen' ? ' active' : ''}`}
+          className={`tree-row${doc?.id === node.screenId && node.type === 'screen' ? ' active' : ''}`}
           style={{ paddingLeft: 8 + depth * 14 }}
           onClick={() => node.type === 'screen' && node.screenId && void openScreen(node.screenId)}
         >

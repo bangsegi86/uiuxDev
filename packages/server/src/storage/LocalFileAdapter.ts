@@ -232,6 +232,18 @@ export class LocalFileAdapter implements StorageAdapter {
     await this.writeJson(this.componentsFile(projectId), list)
     return c
   }
+  async updateComponent(
+    projectId: string,
+    id: string,
+    patch: Partial<CustomComponent>
+  ): Promise<CustomComponent | null> {
+    const list = await this.listComponents(projectId)
+    const idx = list.findIndex((c) => c.id === id)
+    if (idx < 0) return null
+    list[idx] = { ...list[idx], ...patch, id }
+    await this.writeJson(this.componentsFile(projectId), list)
+    return list[idx]
+  }
   async deleteComponent(projectId: string, id: string): Promise<void> {
     const list = (await this.listComponents(projectId)).filter((c) => c.id !== id)
     await this.writeJson(this.componentsFile(projectId), list)

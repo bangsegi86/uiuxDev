@@ -5,8 +5,11 @@ import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
 import { useCollaboration } from './hooks/useCollaboration'
 import { useI18n } from './i18n/I18nContext'
 import { AuthScreen } from './panels/AuthScreen'
+import { ComponentEditor } from './panels/ComponentEditor'
 import { LeftPanel } from './panels/left/LeftPanel'
 import { PropertyPanel } from './panels/right/PropertyPanel'
+import { FrameTabs } from './panels/center/FrameTabs'
+import { BoardView } from './panels/center/BoardView'
 import { DeviceToolbar } from './panels/center/DeviceToolbar'
 import { AlignToolbar } from './panels/center/AlignToolbar'
 import { Canvas } from './panels/center/Canvas'
@@ -26,27 +29,26 @@ export function App() {
   useKeyboardShortcuts()
   useCollaboration()
 
-  const screen = useEditor((s) => s.screen)
+  const doc = useEditor((s) => s.doc)
+  const activeFrameId = useEditor((s) => s.activeFrameId)
+  const view = useEditor((s) => s.view)
+  const componentDraft = useEditor((s) => s.componentDraft)
   const selection = useEditor((s) => s.selection)
   const collaborators = useEditor((s) => s.collaborators)
-  const saveAsComponent = useEditor((s) => s.saveAsComponent)
-
-  const onSaveComponent = async () => {
-    const name = window.prompt(t.promptComponentName)
-    if (!name) return
-    await saveAsComponent(name.trim())
-  }
+  const editComponentFromSelection = useEditor((s) => s.editComponentFromSelection)
 
   if (!authReady) return <div className="center-empty">…</div>
   if (!user) return <AuthScreen />
+
+  const hasActiveFrame = !!doc && !!activeFrameId
 
   return (
     <div className="app">
       <header className="app-header">
         <span className="app-logo">◳ {t.appTitle}</span>
         <span className="spacer" />
-        {selection.length > 0 && (
-          <button onClick={() => void onSaveComponent()}>{t.groupAsComponent}</button>
+        {selection.length > 0 && !componentDraft && (
+          <button onClick={editComponentFromSelection}>{t.groupAsComponent}</button>
         )}
         {collaborators.length > 1 && (
           <span className="presence" title={collaborators.map((c) => c.email).join(', ')}>
@@ -76,14 +78,23 @@ export function App() {
         <LeftPanel />
 
         <main className="center-panel">
-          {screen ? (
+          {doc ? (
             <>
-              <DeviceToolbar />
-              <AlignToolbar />
-              <div className="canvas-area">
-                <Canvas />
-              </div>
-              <NotesPanel />
+              <FrameTabs />
+              {view === 'board' ? (
+                <BoardView />
+              ) : hasActiveFrame ? (
+                <>
+                  <DeviceToolbar />
+                  <AlignToolbar />
+                  <div className="canvas-area">
+                    <Canvas />
+                  </div>
+                  <NotesPanel />
+                </>
+              ) : (
+                <div className="center-empty">{t.selectScreen}</div>
+              )}
             </>
           ) : (
             <div className="center-empty">{t.selectScreen}</div>
@@ -92,6 +103,8 @@ export function App() {
 
         <PropertyPanel />
       </div>
+
+      {componentDraft && <ComponentEditor />}
     </div>
   )
 }

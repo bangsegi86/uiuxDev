@@ -246,6 +246,21 @@ export async function registerRoutes(app: FastifyInstance, storage: StorageAdapt
     }
   )
 
+  app.put<{ Params: { projectId: string; id: string } }>(
+    '/api/projects/:projectId/components/:id',
+    async (req, reply) => {
+      const body = customComponentSaveSchema.parse(req.body)
+      const updated = await storage.updateComponent(req.params.projectId, req.params.id, {
+        name: body.name,
+        thumbnail: body.thumbnail,
+        definition: body.definition as CustomComponent['definition'],
+        updatedAt: now()
+      })
+      if (!updated) return reply.code(404).send({ error: 'component not found' })
+      return updated
+    }
+  )
+
   app.delete<{ Params: { projectId: string; id: string } }>(
     '/api/projects/:projectId/components/:id',
     async (req, reply) => {
