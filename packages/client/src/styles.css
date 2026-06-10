@@ -340,6 +340,23 @@ textarea {
   border: 1px solid var(--accent);
   pointer-events: none;
 }
+.remote-cursor {
+  position: absolute;
+  pointer-events: none;
+  z-index: 1000;
+  transition: left 0.06s linear, top 0.06s linear;
+}
+.remote-cursor-label {
+  position: absolute;
+  left: 14px;
+  top: 12px;
+  color: #fff;
+  font-size: 10px;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
 .canvas-item.custom {
   outline: 1px dashed #a855f7;
   outline-offset: -1px;

@@ -3,6 +3,7 @@ import type { NodeInstance } from '@uiux/shared'
 import { useEditor } from '../state/editorStore'
 import { useAuth } from '../state/authStore'
 import { getToken } from '../lib/apiClient'
+import { setCursorSender } from '../lib/collabBus'
 
 /**
  * Realtime collaboration: open a websocket per open screen, apply remote
@@ -14,6 +15,8 @@ export function useCollaboration() {
   const screenId = useEditor((s) => s.screen?.id ?? null)
   const applyRemoteRoot = useEditor((s) => s.applyRemoteRoot)
   const setCollaborators = useEditor((s) => s.setCollaborators)
+  const setRemoteCursor = useEditor((s) => s.setRemoteCursor)
+  const pruneCursors = useEditor((s) => s.pruneCursors)
 
   const wsRef = useRef<WebSocket | null>(null)
   const lastRemoteRoot = useRef<unknown>(null)
@@ -32,8 +35,19 @@ export function useCollaboration() {
     const ws = new WebSocket(url)
     wsRef.current = ws
 
+    // Let the Canvas push the local cursor through this socket.
+    ws.onopen = () => setCursorSender((x, y) => ws.send(JSON.stringify({ type: 'cursor', x, y })))
+
     ws.onmessage = (e) => {
-      let msg: { type?: string; users?: { id: string; email: string }[]; root?: NodeInstance }
+      let msg: {
+        type?: string
+        users?: { id: string; email: string }[]
+        root?: NodeInstance
+        from?: string
+        email?: string
+        x?: number
+        y?: number
+      }
       try {
         msg = JSON.parse(e.data)
       } catch {
@@ -41,19 +55,23 @@ export function useCollaboration() {
       }
       if (msg.type === 'presence' && msg.users) {
         setCollaborators(msg.users)
+        pruneCursors(msg.users.map((u) => u.id))
       } else if (msg.type === 'update' && msg.root) {
         lastRemoteRoot.current = msg.root
         applyRemoteRoot(msg.root)
+      } else if (msg.type === 'cursor' && msg.from && typeof msg.x === 'number' && typeof msg.y === 'number') {
+        setRemoteCursor(msg.from, { email: msg.email ?? '', x: msg.x, y: msg.y })
       }
     }
     ws.onclose = () => setCollaborators([])
 
     return () => {
+      setCursorSender(null)
       ws.close()
       wsRef.current = null
       setCollaborators([])
     }
-  }, [user, screenId, applyRemoteRoot, setCollaborators])
+  }, [user, screenId, applyRemoteRoot, setCollaborators, setRemoteCursor, pruneCursors])
 
   // Broadcast local screen-tree changes to peers (debounced), skipping echoes.
   useEffect(() => {

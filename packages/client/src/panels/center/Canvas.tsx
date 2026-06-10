@@ -2,7 +2,15 @@ import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { isContainerType, type Layout, type NodeInstance } from '@uiux/shared'
 import { useEditor } from '../../state/editorStore'
 import { absoluteOrigin } from '../../state/tree'
+import { sendCursor } from '../../lib/collabBus'
 import { renderPrimitive, renderStaticTree } from '../../componentRegistry'
+
+/** Stable per-user color derived from the user id. */
+function userColor(id: string): string {
+  let h = 0
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) % 360
+  return `hsl(${h}, 70%, 45%)`
+}
 
 /** Drag payload format shared with the palette / component list. */
 export interface DragPayload {
@@ -57,8 +65,10 @@ export function Canvas() {
   const insertComponentInstance = useEditor((s) => s.insertComponentInstance)
   const reparent = useEditor((s) => s.reparent)
   const checkpoint = useEditor((s) => s.checkpoint)
+  const remoteCursors = useEditor((s) => s.remoteCursors)
 
   const frameRef = useRef<HTMLDivElement>(null)
+  const lastCursorSent = useRef(0)
   const [it, setIt] = useState<Interaction>({ mode: 'idle' })
 
   if (!screen) return null
@@ -111,6 +121,13 @@ export function Canvas() {
   }
 
   const onPointerMove = (e: ReactPointerEvent) => {
+    // Broadcast the local cursor (throttled), even when not interacting.
+    const now = performance.now()
+    if (now - lastCursorSent.current > 40) {
+      lastCursorSent.current = now
+      const c = toCanvas(e.clientX, e.clientY)
+      sendCursor(Math.round(c.x), Math.round(c.y))
+    }
     if (it.mode === 'idle') return
     const { x, y } = toCanvas(e.clientX, e.clientY)
     if (it.mode === 'move') {
@@ -248,6 +265,19 @@ export function Canvas() {
             style={{ left: marquee.left, top: marquee.top, width: marquee.width, height: marquee.height }}
           />
         )}
+        {Object.entries(remoteCursors).map(([id, c]) => {
+          const color = userColor(id)
+          return (
+            <div key={id} className="remote-cursor" style={{ left: c.x, top: c.y }}>
+              <svg width="18" height="18" viewBox="0 0 18 18" style={{ display: 'block' }}>
+                <path d="M2 2 L2 15 L6 11 L9 17 L11 16 L8 10 L14 10 Z" fill={color} stroke="#fff" strokeWidth="1" />
+              </svg>
+              <span className="remote-cursor-label" style={{ background: color }}>
+                {c.email || 'user'}
+              </span>
+            </div>
+          )
+        })}
       </div>
     </div>
   )

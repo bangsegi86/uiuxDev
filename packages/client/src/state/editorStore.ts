@@ -55,6 +55,10 @@ interface EditorState {
   collaborators: { id: string; email: string }[]
   setCollaborators: (c: { id: string; email: string }[]) => void
   applyRemoteRoot: (root: NodeInstance) => void
+  // live cursors of other users, keyed by user id (canvas-space coords)
+  remoteCursors: Record<string, { email: string; x: number; y: number }>
+  setRemoteCursor: (id: string, data: { email: string; x: number; y: number }) => void
+  pruneCursors: (presentIds: string[]) => void
 
   // workspace actions
   loadProjects: () => Promise<Project[]>
@@ -129,6 +133,18 @@ export const useEditor = create<EditorState>((set, get) => ({
   collaborators: [],
 
   setCollaborators: (c) => set({ collaborators: c }),
+
+  remoteCursors: {},
+  setRemoteCursor: (id, data) =>
+    set((s) => ({ remoteCursors: { ...s.remoteCursors, [id]: data } })),
+  pruneCursors: (presentIds) =>
+    set((s) => {
+      const next: Record<string, { email: string; x: number; y: number }> = {}
+      for (const [id, cur] of Object.entries(s.remoteCursors)) {
+        if (presentIds.includes(id)) next[id] = cur
+      }
+      return { remoteCursors: next }
+    }),
 
   // Apply a screen-tree update received from a collaborator (no history entry).
   applyRemoteRoot: (root) => {
@@ -221,7 +237,7 @@ export const useEditor = create<EditorState>((set, get) => ({
     const { projectId } = get()
     if (!projectId) return
     const screen = await api.getScreen(projectId, screenId)
-    set({ screen, selection: [], dirty: false, past: [], future: [] })
+    set({ screen, selection: [], dirty: false, past: [], future: [], remoteCursors: {} })
   },
 
   setSelection: (ids) => set({ selection: ids }),

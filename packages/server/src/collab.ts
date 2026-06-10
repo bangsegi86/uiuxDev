@@ -55,7 +55,7 @@ export async function registerCollab(app: FastifyInstance) {
     broadcastPresence(screenId)
 
     socket.on('message', (raw: Buffer) => {
-      let parsed: { type?: string; root?: unknown }
+      let parsed: { type?: string; root?: unknown; x?: number; y?: number }
       try {
         parsed = JSON.parse(raw.toString())
       } catch {
@@ -63,6 +63,15 @@ export async function registerCollab(app: FastifyInstance) {
       }
       if (parsed.type === 'update' && parsed.root !== undefined) {
         const out = JSON.stringify({ type: 'update', root: parsed.root, from: member.userId })
+        for (const m of room!) if (m !== member) safeSend(m.socket, out)
+      } else if (parsed.type === 'cursor' && typeof parsed.x === 'number' && typeof parsed.y === 'number') {
+        const out = JSON.stringify({
+          type: 'cursor',
+          from: member.userId,
+          email: member.email,
+          x: parsed.x,
+          y: parsed.y
+        })
         for (const m of room!) if (m !== member) safeSend(m.socket, out)
       }
     })
