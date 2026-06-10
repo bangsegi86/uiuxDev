@@ -1,5 +1,5 @@
 /** Shared REST route constants and response DTO shapes. */
-import type { CustomComponent, Project, Screen, Template, TreeNode, User } from './models.js'
+import type { CustomComponent, Project, ScreenDoc, Template, TreeNode, User } from './models.js'
 
 export const API_BASE = '/api'
 
@@ -12,6 +12,8 @@ export const routes = {
   tree: (projectId: string) => `/api/projects/${projectId}/tree`,
   treeNode: (projectId: string, nodeId: string) => `/api/projects/${projectId}/tree/${nodeId}`,
   screen: (projectId: string, screenId: string) => `/api/projects/${projectId}/screens/${screenId}`,
+  frame: (projectId: string, screenId: string, frameId: string) =>
+    `/api/projects/${projectId}/screens/${screenId}/frames/${frameId}`,
   components: (projectId: string) => `/api/projects/${projectId}/components`,
   component: (projectId: string, id: string) => `/api/projects/${projectId}/components/${id}`,
   templates: (projectId: string) => `/api/projects/${projectId}/templates`,
@@ -44,4 +46,4 @@ export type CollabMessage =
 /** Loose alias so the protocol type doesn't pull in the full model here. */
 export type NodeInstanceLike = unknown
 
-export type { Project, TreeNode, Screen, CustomComponent, Template, User }
+export type { Project, TreeNode, ScreenDoc, CustomComponent, Template, User }

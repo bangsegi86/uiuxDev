@@ -81,14 +81,16 @@ async function run() {
   assert.ok(screenId, 'screen node should carry a screenId')
   console.log('✓ create screen file')
 
-  // load the screen design
+  // load the screen document (one default frame)
   const screen = await call('GET', `/api/projects/${projectId}/screens/${screenId}`)
   assert.equal(screen.status, 200)
-  assert.equal(screen.body.device, 'mobile')
-  console.log('✓ load screen')
+  assert.equal(screen.body.frames.length, 1)
+  assert.equal(screen.body.frames[0].device, 'mobile')
+  const frameId = screen.body.frames[0].id
+  console.log('✓ load screen document')
 
-  // save a design (add a button to the root)
-  const root = screen.body.root
+  // save a single frame in place (add a button to its root)
+  const root = screen.body.frames[0].root
   root.children.push({
     id: 'btn1',
     type: 'button',
@@ -97,14 +99,30 @@ async function run() {
     layout: { x: 40, y: 100, w: 120, h: 40 },
     children: []
   })
+  const savedFrame = await call(
+    'PUT',
+    `/api/projects/${projectId}/screens/${screenId}/frames/${frameId}`,
+    { root }
+  )
+  assert.equal(savedFrame.status, 200)
+  assert.equal(savedFrame.body.root.children.length, 1)
+  console.log('✓ save single frame')
+
+  // save document-level notes + a second frame
+  const root2 = { id: 'root', type: 'container', props: {}, style: {}, layout: { x: 0, y: 0, w: 390, h: 844 }, children: [] }
   const saved = await call('PUT', `/api/projects/${projectId}/screens/${screenId}`, {
-    root,
-    notes: 'Login screen for mobile'
+    notes: 'Login flow',
+    frames: [
+      { ...screen.body.frames[0], root },
+      { id: 'f2', name: 'Home', device: 'mobile', canvas: { width: 390, height: 844 }, root: root2, board: { x: 520, y: 80 } }
+    ],
+    connectors: [{ id: 'c1', from: frameId, to: 'f2', label: 'login' }]
   })
   assert.equal(saved.status, 200)
-  assert.equal(saved.body.root.children.length, 1)
-  assert.equal(saved.body.notes, 'Login screen for mobile')
-  console.log('✓ save screen design + notes')
+  assert.equal(saved.body.frames.length, 2)
+  assert.equal(saved.body.connectors.length, 1)
+  assert.equal(saved.body.notes, 'Login flow')
+  console.log('✓ save document (frames + connectors + notes)')
 
   // save a custom component
   const comp = await call('POST', `/api/projects/${projectId}/components`, {

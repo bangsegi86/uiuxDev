@@ -30,6 +30,25 @@ export interface PrimitiveDef {
   container: boolean
   defaultLayout: { w: number; h: number }
   fields: PropField[]
+  /** Non-field default props (e.g. grid columns) merged on creation. */
+  defaultProps?: Record<string, unknown>
+  /** Identifier for a bespoke property editor (e.g. 'grid'). */
+  customEditor?: string
+}
+
+const REQUIRED_FIELD: PropField = {
+  key: 'required',
+  label: 'Required',
+  kind: 'boolean',
+  target: 'props',
+  default: false
+}
+const READONLY_FIELD: PropField = {
+  key: 'readonly',
+  label: 'Read-only',
+  kind: 'boolean',
+  target: 'props',
+  default: false
 }
 
 /** Style fields shared by every primitive. */
@@ -118,7 +137,98 @@ export const PRIMITIVES: PrimitiveDef[] = [
     container: false,
     defaultLayout: { w: 200, h: 40 },
     fields: [
+      { key: 'label', label: 'Label', kind: 'text', target: 'props', default: '' },
       { key: 'placeholder', label: 'Placeholder', kind: 'text', target: 'props', default: 'Enter text' },
+      REQUIRED_FIELD,
+      READONLY_FIELD,
+      ...COMMON_STYLE_FIELDS
+    ]
+  },
+  {
+    type: 'checkbox',
+    label: 'Checkbox',
+    icon: '☑',
+    container: false,
+    defaultLayout: { w: 160, h: 28 },
+    fields: [
+      { key: 'label', label: 'Label', kind: 'text', target: 'props', default: 'Checkbox' },
+      { key: 'checked', label: 'Checked', kind: 'boolean', target: 'props', default: false },
+      REQUIRED_FIELD,
+      READONLY_FIELD,
+      ...COMMON_STYLE_FIELDS
+    ]
+  },
+  {
+    type: 'radio',
+    label: 'Radio group',
+    icon: '◉',
+    container: false,
+    defaultLayout: { w: 200, h: 96 },
+    fields: [
+      { key: 'label', label: 'Label', kind: 'text', target: 'props', default: '' },
+      { key: 'options', label: 'Options (comma)', kind: 'text', target: 'props', default: 'A,B,C' },
+      { key: 'value', label: 'Selected', kind: 'text', target: 'props', default: 'A' },
+      REQUIRED_FIELD,
+      READONLY_FIELD,
+      ...COMMON_STYLE_FIELDS
+    ]
+  },
+  {
+    type: 'calendar',
+    label: 'Date picker',
+    icon: '📅',
+    container: false,
+    defaultLayout: { w: 200, h: 40 },
+    fields: [
+      { key: 'label', label: 'Label', kind: 'text', target: 'props', default: '' },
+      { key: 'value', label: 'Value (YYYY-MM-DD)', kind: 'text', target: 'props', default: '' },
+      { key: 'placeholder', label: 'Placeholder', kind: 'text', target: 'props', default: 'YYYY-MM-DD' },
+      REQUIRED_FIELD,
+      READONLY_FIELD,
+      ...COMMON_STYLE_FIELDS
+    ]
+  },
+  {
+    type: 'grid',
+    label: 'Grid (table)',
+    icon: '▦',
+    container: false,
+    defaultLayout: { w: 480, h: 200 },
+    customEditor: 'grid',
+    defaultProps: {
+      columns: [
+        { title: 'Col 1', width: 120, colSpan: 1 },
+        { title: 'Col 2', width: 120, colSpan: 1 },
+        { title: 'Col 3', width: 120, colSpan: 1 }
+      ],
+      rowCount: 3
+    },
+    fields: [...COMMON_STYLE_FIELDS]
+  },
+  {
+    type: 'modal',
+    label: 'Modal / Message box',
+    icon: '🗔',
+    container: true,
+    defaultLayout: { w: 360, h: 200 },
+    fields: [
+      { key: 'title', label: 'Title', kind: 'text', target: 'props', default: 'Title' },
+      { key: 'message', label: 'Message', kind: 'textarea', target: 'props', default: 'Message text' },
+      { key: 'confirmText', label: 'Confirm button', kind: 'text', target: 'props', default: 'OK' },
+      { key: 'cancelText', label: 'Cancel button', kind: 'text', target: 'props', default: 'Cancel' },
+      { key: 'showOverlay', label: 'Dim background', kind: 'boolean', target: 'props', default: true },
+      ...COMMON_STYLE_FIELDS
+    ]
+  },
+  {
+    type: 'annotation',
+    label: 'Annotation',
+    icon: '💬',
+    container: false,
+    defaultLayout: { w: 180, h: 80 },
+    fields: [
+      { key: 'text', label: 'Note', kind: 'textarea', target: 'props', default: '설명을 입력하세요' },
+      { key: 'link', label: 'Link / Reference', kind: 'text', target: 'props', default: '' },
       ...COMMON_STYLE_FIELDS
     ]
   },
@@ -172,7 +282,7 @@ export function defaultsFor(def: PrimitiveDef): {
   props: Record<string, unknown>
   style: Record<string, string>
 } {
-  const props: Record<string, unknown> = {}
+  const props: Record<string, unknown> = { ...(def.defaultProps ?? {}) }
   const style: Record<string, string> = {}
   for (const f of def.fields) {
     if (f.default === undefined) continue

@@ -1,7 +1,7 @@
 import type {
   CustomComponent,
   Project,
-  Screen,
+  ScreenDoc,
   Template,
   TreeNode
 } from '@uiux/shared'
@@ -42,10 +42,10 @@ export interface StorageAdapter {
   updateTreeNode(id: string, patch: Partial<TreeNode>): Promise<TreeNode | null>
   deleteTreeNode(id: string): Promise<void>
 
-  // Screens
-  getScreen(id: string): Promise<Screen | null>
-  createScreen(projectId: string, screen: Screen): Promise<Screen>
-  updateScreen(id: string, patch: Partial<Screen>): Promise<Screen | null>
+  // Screen documents
+  getScreen(id: string): Promise<ScreenDoc | null>
+  createScreen(projectId: string, screen: ScreenDoc): Promise<ScreenDoc>
+  updateScreen(id: string, patch: Partial<ScreenDoc>): Promise<ScreenDoc | null>
   deleteScreen(id: string): Promise<void>
 
   // Custom components

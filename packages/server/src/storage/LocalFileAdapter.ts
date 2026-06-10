@@ -3,7 +3,7 @@ import path from 'node:path'
 import type {
   CustomComponent,
   Project,
-  Screen,
+  ScreenDoc,
   Template,
   TreeNode
 } from '@uiux/shared'
@@ -198,19 +198,19 @@ export class LocalFileAdapter implements StorageAdapter {
   }
 
   // --- screens ---
-  async getScreen(id: string): Promise<Screen | null> {
+  async getScreen(id: string): Promise<ScreenDoc | null> {
     const projectId = await this.findScreenProject(id)
     if (!projectId) return null
-    return this.readJson<Screen | null>(this.screenFile(projectId, id), null)
+    return this.readJson<ScreenDoc | null>(this.screenFile(projectId, id), null)
   }
-  async createScreen(projectId: string, screen: Screen): Promise<Screen> {
+  async createScreen(projectId: string, screen: ScreenDoc): Promise<ScreenDoc> {
     await this.writeJson(this.screenFile(projectId, screen.id), screen)
     return screen
   }
-  async updateScreen(id: string, patch: Partial<Screen>): Promise<Screen | null> {
+  async updateScreen(id: string, patch: Partial<ScreenDoc>): Promise<ScreenDoc | null> {
     const projectId = await this.findScreenProject(id)
     if (!projectId) return null
-    const current = await this.readJson<Screen | null>(this.screenFile(projectId, id), null)
+    const current = await this.readJson<ScreenDoc | null>(this.screenFile(projectId, id), null)
     if (!current) return null
     const next = { ...current, ...patch, id }
     await this.writeJson(this.screenFile(projectId, id), next)

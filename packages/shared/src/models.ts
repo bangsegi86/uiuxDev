@@ -67,20 +67,41 @@ export interface TreeNode {
   screenId?: string
 }
 
-/** A full screen design document. */
-export interface Screen {
+/** A single screen frame within a document. */
+export interface Frame {
   id: string
   name: string
   device: DeviceKind
   canvas: { width: number; height: number }
   root: NodeInstance
+  /** Position of this frame on the flow board. */
+  board: { x: number; y: number }
+}
+
+/** A relationship/flow arrow between two frames on the board. */
+export interface Connector {
+  id: string
+  from: string // frame id
+  to: string // frame id
+  label?: string
+}
+
+/**
+ * A screen document (the "file"): holds multiple frames and the connectors
+ * that express the navigation/flow relationships between them.
+ */
+export interface ScreenDoc {
+  id: string
+  name: string
+  frames: Frame[]
+  connectors: Connector[]
   /** Free-form design reference notes shown in the collapsible bottom panel. */
   notes: string
   createdAt: string
   updatedAt: string
 }
 
-/** A user-defined, reusable component built by grouping primitives (no-code). */
+/** A user-defined, reusable component built in the component editor (no-code). */
 export interface CustomComponent {
   id: string
   name: string
@@ -101,7 +122,7 @@ export interface Template {
   updatedAt: string
 }
 
-/** Convenience factory for an empty root container of a screen. */
+/** Convenience factory for an empty root container of a frame. */
 export function emptyRoot(device: DeviceKind): NodeInstance {
   const frame = DEVICE_FRAMES[device]
   return {
@@ -111,5 +132,23 @@ export function emptyRoot(device: DeviceKind): NodeInstance {
     style: { background: '#ffffff' },
     layout: { x: 0, y: 0, w: frame.width, h: frame.height },
     children: []
+  }
+}
+
+/** Create a fresh frame for a given device. */
+export function emptyFrame(
+  id: string,
+  name: string,
+  device: DeviceKind,
+  board: { x: number; y: number }
+): Frame {
+  const f = DEVICE_FRAMES[device]
+  return {
+    id,
+    name,
+    device,
+    canvas: { width: f.width, height: f.height },
+    root: emptyRoot(device),
+    board
   }
 }

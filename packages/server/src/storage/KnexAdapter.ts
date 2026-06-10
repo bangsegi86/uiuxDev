@@ -2,7 +2,7 @@ import type { Knex } from 'knex'
 import type {
   CustomComponent,
   Project,
-  Screen,
+  ScreenDoc,
   Template,
   TreeNode
 } from '@uiux/shared'
@@ -105,25 +105,24 @@ export class KnexAdapter implements StorageAdapter {
     await this.db('tree_nodes').whereIn('id', [...toRemove]).del()
   }
 
-  // --- screens ---
-  async getScreen(id: string): Promise<Screen | null> {
+  // --- screen documents ---
+  async getScreen(id: string): Promise<ScreenDoc | null> {
     const row = await this.db('screens').where({ id }).first()
     if (!row) return null
     return this.rowToScreen(row)
   }
-  async createScreen(projectId: string, screen: Screen): Promise<Screen> {
+  async createScreen(projectId: string, screen: ScreenDoc): Promise<ScreenDoc> {
     await this.db('screens').insert(this.screenToRow(projectId, screen))
     return screen
   }
-  async updateScreen(id: string, patch: Partial<Screen>): Promise<Screen | null> {
+  async updateScreen(id: string, patch: Partial<ScreenDoc>): Promise<ScreenDoc | null> {
     const current = await this.getScreen(id)
     if (!current) return null
     const next = { ...current, ...patch, id }
     const row: Record<string, unknown> = {}
     if (patch.name !== undefined) row.name = next.name
-    if (patch.device !== undefined) row.device = next.device
-    if (patch.canvas !== undefined) row.canvas = JSON.stringify(next.canvas)
-    if (patch.root !== undefined) row.root = JSON.stringify(next.root)
+    if (patch.frames !== undefined) row.frames = JSON.stringify(next.frames)
+    if (patch.connectors !== undefined) row.connectors = JSON.stringify(next.connectors)
     if (patch.notes !== undefined) row.notes = next.notes
     row.updatedAt = next.updatedAt
     await this.db('screens').where({ id }).update(row)
@@ -132,26 +131,24 @@ export class KnexAdapter implements StorageAdapter {
   async deleteScreen(id: string): Promise<void> {
     await this.db('screens').where({ id }).del()
   }
-  private screenToRow(projectId: string, s: Screen) {
+  private screenToRow(projectId: string, s: ScreenDoc) {
     return {
       id: s.id,
       projectId,
       name: s.name,
-      device: s.device,
-      canvas: JSON.stringify(s.canvas),
-      root: JSON.stringify(s.root),
+      frames: JSON.stringify(s.frames),
+      connectors: JSON.stringify(s.connectors),
       notes: s.notes,
       createdAt: s.createdAt,
       updatedAt: s.updatedAt
     }
   }
-  private rowToScreen(row: Record<string, unknown>): Screen {
+  private rowToScreen(row: Record<string, unknown>): ScreenDoc {
     return {
       id: row.id as string,
       name: row.name as string,
-      device: row.device as Screen['device'],
-      canvas: this.parse(row.canvas),
-      root: this.parse(row.root),
+      frames: this.parse(row.frames),
+      connectors: this.parse(row.connectors ?? '[]'),
       notes: (row.notes as string) ?? '',
       createdAt: row.createdAt as string,
       updatedAt: row.updatedAt as string

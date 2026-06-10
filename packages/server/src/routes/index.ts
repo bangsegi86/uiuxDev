@@ -3,8 +3,8 @@ import { nanoid } from 'nanoid'
 import {
   authSchema,
   customComponentSaveSchema,
-  DEVICE_FRAMES,
-  emptyRoot,
+  emptyFrame,
+  frameSaveSchema,
   projectCreateSchema,
   routes,
   screenSaveSchema,
@@ -12,8 +12,9 @@ import {
   treeNodeCreateSchema,
   treeNodeUpdateSchema,
   type CustomComponent,
+  type Frame,
   type Project,
-  type Screen,
+  type ScreenDoc,
   type Template,
   type TreeNode
 } from '@uiux/shared'
@@ -140,20 +141,18 @@ export async function registerRoutes(app: FastifyInstance, storage: StorageAdapt
       }
       if (body.type === 'screen') {
         const device = body.device ?? 'pc'
-        const frame = DEVICE_FRAMES[device]
         const ts = now()
-        const screen: Screen = {
+        const doc: ScreenDoc = {
           id: id(),
           name: body.name,
-          device,
-          canvas: { width: frame.width, height: frame.height },
-          root: emptyRoot(device),
+          frames: [emptyFrame(id(), body.name, device, { x: 80, y: 80 })],
+          connectors: [],
           notes: '',
           createdAt: ts,
           updatedAt: ts
         }
-        await storage.createScreen(projectId, screen)
-        node.screenId = screen.id
+        await storage.createScreen(projectId, doc)
+        node.screenId = doc.id
       }
       await storage.createTreeNode(node)
       return reply.code(201).send(node)
@@ -197,11 +196,29 @@ export async function registerRoutes(app: FastifyInstance, storage: StorageAdapt
     async (req, reply) => {
       const body = screenSaveSchema.parse(req.body)
       const updated = await storage.updateScreen(req.params.screenId, {
-        ...(body as Partial<Screen>),
+        ...(body as Partial<ScreenDoc>),
         updatedAt: now()
       })
       if (!updated) return reply.code(404).send({ error: 'screen not found' })
       return updated
+    }
+  )
+
+  // Save a single frame in place (each screen/frame can be saved independently).
+  app.put<{ Params: { projectId: string; screenId: string; frameId: string } }>(
+    '/api/projects/:projectId/screens/:screenId/frames/:frameId',
+    async (req, reply) => {
+      const patch = frameSaveSchema.parse(req.body)
+      const doc = await storage.getScreen(req.params.screenId)
+      if (!doc) return reply.code(404).send({ error: 'screen not found' })
+      const idx = doc.frames.findIndex((f) => f.id === req.params.frameId)
+      if (idx < 0) return reply.code(404).send({ error: 'frame not found' })
+      doc.frames[idx] = { ...doc.frames[idx], ...(patch as Partial<Frame>) }
+      const updated = await storage.updateScreen(doc.id, {
+        frames: doc.frames,
+        updatedAt: now()
+      })
+      return updated?.frames[idx]
     }
   )
 
