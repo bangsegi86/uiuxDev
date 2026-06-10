@@ -1,12 +1,12 @@
 import {
   routes,
   type AuthResponse,
+  type Board,
   type CustomComponent,
   type DeviceKind,
-  type Frame,
   type NodeInstance,
   type Project,
-  type ScreenDoc,
+  type Screen,
   type Template,
   type TreeNode,
   type User
@@ -55,7 +55,7 @@ export const api = {
   listTree: (projectId: string) => http<TreeNode[]>('GET', routes.tree(projectId)),
   createTreeNode: (
     projectId: string,
-    input: { type: 'folder' | 'screen'; name: string; parentId?: string | null; device?: DeviceKind }
+    input: { type: 'folder' | 'screen' | 'board'; name: string; parentId?: string | null; device?: DeviceKind }
   ) => http<TreeNode>('POST', routes.tree(projectId), input),
   updateTreeNode: (
     projectId: string,
@@ -66,11 +66,14 @@ export const api = {
     http<void>('DELETE', routes.treeNode(projectId, nodeId)),
 
   getScreen: (projectId: string, screenId: string) =>
-    http<ScreenDoc>('GET', routes.screen(projectId, screenId)),
-  saveScreen: (projectId: string, screenId: string, patch: Partial<ScreenDoc>) =>
-    http<ScreenDoc>('PUT', routes.screen(projectId, screenId), patch),
-  saveFrame: (projectId: string, screenId: string, frameId: string, patch: Partial<Frame>) =>
-    http<Frame>('PUT', routes.frame(projectId, screenId, frameId), patch),
+    http<Screen>('GET', routes.screen(projectId, screenId)),
+  saveScreen: (projectId: string, screenId: string, patch: Partial<Screen>) =>
+    http<Screen>('PUT', routes.screen(projectId, screenId), patch),
+
+  getBoard: (projectId: string, boardId: string) =>
+    http<Board>('GET', routes.board(projectId, boardId)),
+  saveBoard: (projectId: string, boardId: string, patch: Partial<Board>) =>
+    http<Board>('PUT', routes.board(projectId, boardId), patch),
 
   listComponents: (projectId: string) =>
     http<CustomComponent[]>('GET', routes.components(projectId)),

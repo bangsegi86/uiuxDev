@@ -30,7 +30,7 @@ export function useKeyboardShortcuts() {
         s.duplicate()
         e.preventDefault()
       } else if (mod && e.key.toLowerCase() === 's') {
-        void s.saveScreen()
+        void s.saveActive()
         e.preventDefault()
       } else if (e.key === 'Delete' || e.key === 'Backspace') {
         if (s.selection.length) {

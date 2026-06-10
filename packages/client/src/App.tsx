@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { useEditor } from './state/editorStore'
+import { selectActiveBoard, useEditor } from './state/editorStore'
 import { useAuth } from './state/authStore'
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
 import { useCollaboration } from './hooks/useCollaboration'
@@ -8,7 +8,7 @@ import { AuthScreen } from './panels/AuthScreen'
 import { ComponentEditor } from './panels/ComponentEditor'
 import { LeftPanel } from './panels/left/LeftPanel'
 import { PropertyPanel } from './panels/right/PropertyPanel'
-import { FrameTabs } from './panels/center/FrameTabs'
+import { TabBar } from './panels/center/TabBar'
 import { BoardView } from './panels/center/BoardView'
 import { DeviceToolbar } from './panels/center/DeviceToolbar'
 import { AlignToolbar } from './panels/center/AlignToolbar'
@@ -29,9 +29,8 @@ export function App() {
   useKeyboardShortcuts()
   useCollaboration()
 
-  const doc = useEditor((s) => s.doc)
-  const activeFrameId = useEditor((s) => s.activeFrameId)
-  const view = useEditor((s) => s.view)
+  const activeTab = useEditor((s) => s.activeTab)
+  const activeBoard = useEditor(selectActiveBoard)
   const componentDraft = useEditor((s) => s.componentDraft)
   const selection = useEditor((s) => s.selection)
   const collaborators = useEditor((s) => s.collaborators)
@@ -40,14 +39,14 @@ export function App() {
   if (!authReady) return <div className="center-empty">…</div>
   if (!user) return <AuthScreen />
 
-  const hasActiveFrame = !!doc && !!activeFrameId
+  const isScreenTab = activeTab?.kind === 'screen'
 
   return (
     <div className="app">
       <header className="app-header">
         <span className="app-logo">◳ {t.appTitle}</span>
         <span className="spacer" />
-        {selection.length > 0 && !componentDraft && (
+        {selection.length > 0 && !componentDraft && isScreenTab && (
           <button onClick={editComponentFromSelection}>{t.groupAsComponent}</button>
         )}
         {collaborators.length > 1 && (
@@ -78,23 +77,19 @@ export function App() {
         <LeftPanel />
 
         <main className="center-panel">
-          {doc ? (
+          <TabBar />
+          {!activeTab ? (
+            <div className="center-empty">{t.selectScreen}</div>
+          ) : activeBoard ? (
+            <BoardView board={activeBoard} />
+          ) : isScreenTab ? (
             <>
-              <FrameTabs />
-              {view === 'board' ? (
-                <BoardView />
-              ) : hasActiveFrame ? (
-                <>
-                  <DeviceToolbar />
-                  <AlignToolbar />
-                  <div className="canvas-area">
-                    <Canvas />
-                  </div>
-                  <NotesPanel />
-                </>
-              ) : (
-                <div className="center-empty">{t.selectScreen}</div>
-              )}
+              <DeviceToolbar />
+              <AlignToolbar />
+              <div className="canvas-area">
+                <Canvas />
+              </div>
+              <NotesPanel />
             </>
           ) : (
             <div className="center-empty">{t.selectScreen}</div>

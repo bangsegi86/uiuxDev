@@ -566,7 +566,58 @@ textarea {
   font-size: 10px;
 }
 
-/* ---- frame tabs ---- */
+/* ---- document tabs (IDE-style) ---- */
+.tab-bar {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  padding: 4px 8px 0;
+  border-bottom: 1px solid var(--border);
+  background: #fafbfc;
+  overflow-x: auto;
+  flex-shrink: 0;
+}
+.doc-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-bottom: none;
+  border-radius: 7px 7px 0 0;
+  background: #eef1f5;
+  cursor: pointer;
+  white-space: nowrap;
+  max-width: 200px;
+}
+.doc-tab.active {
+  background: #fff;
+  border-color: var(--border-strong);
+  font-weight: 600;
+}
+.doc-tab-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.doc-tab-dirty {
+  color: var(--accent);
+  font-size: 16px;
+  line-height: 0;
+}
+.doc-tab-x {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  padding: 0 2px;
+}
+.board-frame-x {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  padding: 0 4px;
+}
+
+/* ---- frame tabs (legacy) ---- */
 .frame-tabs {
   display: flex;
   align-items: center;

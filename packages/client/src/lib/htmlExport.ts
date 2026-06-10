@@ -1,14 +1,14 @@
-import type { CustomComponent, Frame, NodeInstance } from '@uiux/shared'
+import type { CustomComponent, NodeInstance, Screen } from '@uiux/shared'
 
-/** Export a single frame to a self-contained, standalone HTML document. */
-export function exportFrameToHtml(frame: Frame, components: CustomComponent[]): string {
-  const body = frame.root.children.map((n) => renderNode(n, components)).join('\n')
+/** Export a screen design to a self-contained, standalone HTML document. */
+export function exportScreenToHtml(screen: Screen, components: CustomComponent[]): string {
+  const body = screen.root.children.map((n) => renderNode(n, components)).join('\n')
   return `<!doctype html>
 <html lang="ko">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>${escapeHtml(frame.name)}</title>
+<title>${escapeHtml(screen.name)}</title>
 <style>
   * { box-sizing: border-box; }
   body { margin: 0; background: #f1f5f9; }
@@ -17,7 +17,7 @@ export function exportFrameToHtml(frame: Frame, components: CustomComponent[]): 
 </style>
 </head>
 <body>
-  <div class="uiux-screen" style="width:${frame.canvas.width}px;height:${frame.canvas.height}px;">
+  <div class="uiux-screen" style="width:${screen.canvas.width}px;height:${screen.canvas.height}px;">
 ${body}
   </div>
 </body>
@@ -148,14 +148,14 @@ ${children}
   }
 }
 
-/** Trigger a browser download of a frame as an .html file. */
-export function downloadFrameHtml(frame: Frame, components: CustomComponent[]): void {
-  const html = exportFrameToHtml(frame, components)
+/** Trigger a browser download of the screen as an .html file. */
+export function downloadScreenHtml(screen: Screen, components: CustomComponent[]): void {
+  const html = exportScreenToHtml(screen, components)
   const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `${frame.name || 'screen'}.html`
+  a.download = `${screen.name || 'screen'}.html`
   document.body.appendChild(a)
   a.click()
   a.remove()

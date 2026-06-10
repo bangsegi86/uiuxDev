@@ -3,15 +3,15 @@ import { nanoid } from 'nanoid'
 import {
   createInstance,
   DEVICE_FRAMES,
-  emptyFrame,
+  type Board,
+  type BoardItem,
   type Connector,
   type CustomComponent,
   type DeviceKind,
-  type Frame,
   type Layout,
   type NodeInstance,
   type Project,
-  type ScreenDoc,
+  type Screen,
   type Template,
   type TreeNode
 } from '@uiux/shared'
@@ -32,11 +32,16 @@ import {
 
 export type AlignKind = 'left' | 'centerH' | 'right' | 'top' | 'middle' | 'bottom'
 export type DistributeKind = 'horizontal' | 'vertical'
-export type EditorView = 'edit' | 'board'
+export type TabKind = 'screen' | 'board'
 
-/** Draft used by the component editor (a component's definition root). */
+export interface Tab {
+  kind: TabKind
+  id: string
+}
+
+/** Draft used by the component editor. */
 export interface ComponentDraft {
-  id: string | null // existing component id, or null for a new one
+  id: string | null
   name: string
 }
 
@@ -48,12 +53,15 @@ interface EditorState {
   components: CustomComponent[]
   templates: Template[]
 
-  // active document + editing context
-  doc: ScreenDoc | null
-  activeFrameId: string | null
-  view: EditorView
+  // open documents (IDE-style tabs)
+  screens: Record<string, Screen>
+  boards: Record<string, Board>
+  openTabs: Tab[]
+  activeTab: Tab | null
+  dirty: Record<string, boolean>
+
+  // component editor overlay
   componentDraft: ComponentDraft | null
-  /** Working root of the component editor (when componentDraft is set). */
   draftRoot: NodeInstance | null
 
   // canvas working state (applies to the active surface)
@@ -61,7 +69,6 @@ interface EditorState {
   clipboard: { nodes: NodeInstance[] } | null
   zoom: number
   saving: boolean
-  dirty: boolean
   notesOpen: boolean
   past: NodeInstance[]
   future: NodeInstance[]
@@ -75,22 +82,23 @@ interface EditorState {
   openProject: (id: string) => Promise<void>
   createProject: (name: string) => Promise<Project>
   refreshTree: () => Promise<void>
-  createNode: (type: 'folder' | 'screen', name: string, parentId: string | null, device?: DeviceKind) => Promise<void>
+  createNode: (type: 'folder' | 'screen' | 'board', name: string, parentId: string | null, device?: DeviceKind) => Promise<void>
   renameNode: (nodeId: string, name: string) => Promise<void>
   deleteNode: (nodeId: string) => Promise<void>
-  openScreen: (screenId: string) => Promise<void>
 
-  // --- frames / board ---
-  setActiveFrame: (frameId: string) => void
-  addFrame: (device: DeviceKind) => void
-  renameFrame: (frameId: string, name: string) => void
-  deleteFrame: (frameId: string) => void
-  setFrameDevice: (device: DeviceKind) => void
-  moveFrameOnBoard: (frameId: string, x: number, y: number) => void
-  setView: (view: EditorView) => void
-  addConnector: (from: string, to: string) => void
-  updateConnector: (id: string, patch: Partial<Connector>) => void
-  deleteConnector: (id: string) => void
+  // --- tabs ---
+  openScreen: (screenId: string) => Promise<void>
+  openBoard: (boardId: string) => Promise<void>
+  setActiveTab: (tab: Tab) => void
+  closeTab: (tab: Tab) => void
+
+  // --- board actions ---
+  addScreenToBoard: (boardId: string, screenId: string) => Promise<void>
+  removeScreenFromBoard: (boardId: string, screenId: string) => void
+  moveBoardItem: (boardId: string, screenId: string, x: number, y: number) => void
+  addConnector: (boardId: string, from: string, to: string) => void
+  updateConnector: (boardId: string, id: string, patch: Partial<Connector>) => void
+  deleteConnector: (boardId: string, id: string) => void
 
   // --- component editor ---
   newComponent: () => void
@@ -105,7 +113,7 @@ interface EditorState {
   undo: () => void
   redo: () => void
 
-  // --- canvas actions (operate on the active surface root) ---
+  // --- canvas actions ---
   setSelection: (ids: string[]) => void
   toggleSelection: (id: string) => void
   insertPrimitive: (type: string, at: { x: number; y: number }, parentId?: string) => void
@@ -124,6 +132,7 @@ interface EditorState {
   distribute: (kind: DistributeKind) => void
 
   // --- device / notes / zoom ---
+  setDevice: (device: DeviceKind) => void
   setZoom: (zoom: number) => void
   setNotes: (notes: string) => void
   toggleNotes: () => void
@@ -135,7 +144,7 @@ interface EditorState {
   deleteTemplate: (id: string) => Promise<void>
 
   // --- persistence ---
-  saveScreen: () => Promise<void>
+  saveActive: () => Promise<void>
 
   // --- internal surface helpers ---
   getRoot: () => NodeInstance | null
@@ -143,31 +152,44 @@ interface EditorState {
 
   // --- collaboration ---
   setCollaborators: (c: { id: string; email: string }[]) => void
-  applyRemoteRoot: (frameId: string, root: NodeInstance) => void
+  applyRemoteRoot: (screenId: string, root: NodeInstance) => void
   setRemoteCursor: (id: string, data: { email: string; x: number; y: number }) => void
   pruneCursors: (presentIds: string[]) => void
 }
 
-/** The active frame, if any (and not in the component editor). */
-function activeFrame(s: EditorState): Frame | null {
-  if (!s.doc || !s.activeFrameId) return null
-  return s.doc.frames.find((f) => f.id === s.activeFrameId) ?? null
+/** The active screen, if a screen tab is active and the component editor is closed. */
+function activeScreen(s: EditorState): Screen | null {
+  if (s.componentDraft || s.activeTab?.kind !== 'screen') return null
+  return s.screens[s.activeTab.id] ?? null
 }
 
-/** Selector: the root currently being edited (component draft or active frame). */
+/** Selector: the root currently being edited (component draft or active screen). */
 export function selectRoot(s: EditorState): NodeInstance | null {
   if (s.componentDraft) return s.draftRoot
-  return activeFrame(s)?.root ?? null
+  return activeScreen(s)?.root ?? null
 }
 
-/** Selector: the size/device of the active surface for the canvas frame. */
+/** Selector: size/device of the active surface for the canvas frame. */
 export function selectSurface(s: EditorState): { width: number; height: number; device: DeviceKind } | null {
   if (s.componentDraft && s.draftRoot) {
     return { width: s.draftRoot.layout.w, height: s.draftRoot.layout.h, device: 'pc' }
   }
-  const f = activeFrame(s)
-  return f ? { width: f.canvas.width, height: f.canvas.height, device: f.device } : null
+  const sc = activeScreen(s)
+  return sc ? { width: sc.canvas.width, height: sc.canvas.height, device: sc.device } : null
 }
+
+/** Selector: the active board (if a board tab is active). */
+export function selectActiveBoard(s: EditorState): Board | null {
+  if (s.activeTab?.kind !== 'board') return null
+  return s.boards[s.activeTab.id] ?? null
+}
+
+/** Active screen id for collaboration (null while in a board or the component editor). */
+export function selectActiveScreenId(s: EditorState): string | null {
+  return activeScreen(s)?.id ?? null
+}
+
+const sameTab = (a: Tab | null, b: Tab) => !!a && a.kind === b.kind && a.id === b.id
 
 export const useEditor = create<EditorState>((set, get) => ({
   projectId: null,
@@ -175,16 +197,17 @@ export const useEditor = create<EditorState>((set, get) => ({
   tree: [],
   components: [],
   templates: [],
-  doc: null,
-  activeFrameId: null,
-  view: 'edit',
+  screens: {},
+  boards: {},
+  openTabs: [],
+  activeTab: null,
+  dirty: {},
   componentDraft: null,
   draftRoot: null,
   selection: [],
   clipboard: null,
   zoom: 1,
   saving: false,
-  dirty: false,
   notesOpen: true,
   past: [],
   future: [],
@@ -196,10 +219,12 @@ export const useEditor = create<EditorState>((set, get) => ({
   setRoot: (root) => {
     const s = get()
     if (s.componentDraft) {
-      set({ draftRoot: root, dirty: true })
-    } else if (s.doc && s.activeFrameId) {
-      const frames = s.doc.frames.map((f) => (f.id === s.activeFrameId ? { ...f, root } : f))
-      set({ doc: { ...s.doc, frames }, dirty: true })
+      set({ draftRoot: root })
+      return
+    }
+    const sc = activeScreen(s)
+    if (sc) {
+      set({ screens: { ...s.screens, [sc.id]: { ...sc, root } }, dirty: { ...s.dirty, [sc.id]: true } })
     }
   },
 
@@ -215,8 +240,11 @@ export const useEditor = create<EditorState>((set, get) => ({
       tree,
       components,
       templates,
-      doc: null,
-      activeFrameId: null,
+      screens: {},
+      boards: {},
+      openTabs: [],
+      activeTab: null,
+      dirty: {},
       componentDraft: null,
       draftRoot: null,
       selection: []
@@ -241,6 +269,7 @@ export const useEditor = create<EditorState>((set, get) => ({
     const node = await api.createTreeNode(projectId, { type, name, parentId, device })
     await get().refreshTree()
     if (type === 'screen' && node.screenId) await get().openScreen(node.screenId)
+    if (type === 'board' && node.boardId) await get().openBoard(node.boardId)
   },
 
   renameNode: async (nodeId, name) => {
@@ -251,107 +280,171 @@ export const useEditor = create<EditorState>((set, get) => ({
   },
 
   deleteNode: async (nodeId) => {
-    const { projectId, tree, doc } = get()
+    const { projectId, tree } = get()
     if (!projectId) return
     const node = tree.find((n) => n.id === nodeId)
     await api.deleteTreeNode(projectId, nodeId)
     await get().refreshTree()
-    if (node?.type === 'screen' && node.screenId === doc?.id) {
-      set({ doc: null, activeFrameId: null, selection: [] })
-    }
+    // close any tabs that referenced the removed screen/board
+    if (node?.type === 'screen' && node.screenId) get().closeTab({ kind: 'screen', id: node.screenId })
+    if (node?.type === 'board' && node.boardId) get().closeTab({ kind: 'board', id: node.boardId })
   },
 
+  // --- tabs ---
   openScreen: async (screenId) => {
+    const { projectId, screens } = get()
+    if (!projectId) return
+    if (!screens[screenId]) {
+      const screen = await api.getScreen(projectId, screenId)
+      set((s) => ({ screens: { ...s.screens, [screenId]: screen } }))
+    }
+    get().setActiveTab({ kind: 'screen', id: screenId })
+  },
+
+  openBoard: async (boardId) => {
+    const { projectId, boards } = get()
+    if (!projectId) return
+    let board = boards[boardId]
+    if (!board) {
+      board = await api.getBoard(projectId, boardId)
+      set((s) => ({ boards: { ...s.boards, [boardId]: board } }))
+    }
+    // preload referenced screens so the board can render previews
+    for (const item of board.items) {
+      if (!get().screens[item.screenId]) {
+        try {
+          const sc = await api.getScreen(projectId, item.screenId)
+          set((s) => ({ screens: { ...s.screens, [sc.id]: sc } }))
+        } catch {
+          // screen may have been deleted; board will skip it
+        }
+      }
+    }
+    get().setActiveTab({ kind: 'board', id: boardId })
+  },
+
+  setActiveTab: (tab) => {
+    set((s) => {
+      const exists = s.openTabs.some((t) => sameTab(t, tab))
+      return {
+        activeTab: tab,
+        openTabs: exists ? s.openTabs : [...s.openTabs, tab],
+        selection: [],
+        past: [],
+        future: [],
+        remoteCursors: {}
+      }
+    })
+  },
+
+  closeTab: (tab) => {
+    set((s) => {
+      const openTabs = s.openTabs.filter((t) => !sameTab(t, tab))
+      let activeTab = s.activeTab
+      if (sameTab(s.activeTab, tab)) {
+        activeTab = openTabs[openTabs.length - 1] ?? null
+      }
+      return { openTabs, activeTab, selection: [], past: [], future: [] }
+    })
+  },
+
+  // --- board actions ---
+  addScreenToBoard: async (boardId, screenId) => {
     const { projectId } = get()
     if (!projectId) return
-    const doc = await api.getScreen(projectId, screenId)
-    set({
-      doc,
-      activeFrameId: doc.frames[0]?.id ?? null,
-      view: 'edit',
-      componentDraft: null,
-      draftRoot: null,
-      selection: [],
-      dirty: false,
-      past: [],
-      future: [],
-      remoteCursors: {}
+    if (!get().screens[screenId]) {
+      try {
+        const sc = await api.getScreen(projectId, screenId)
+        set((s) => ({ screens: { ...s.screens, [sc.id]: sc } }))
+      } catch {
+        return
+      }
+    }
+    set((s) => {
+      const board = s.boards[boardId]
+      if (!board || board.items.some((i) => i.screenId === screenId)) return {}
+      const offset = board.items.length
+      const item: BoardItem = { screenId, x: 80 + offset * 40, y: 80 + offset * 40 }
+      return {
+        boards: { ...s.boards, [boardId]: { ...board, items: [...board.items, item] } },
+        dirty: { ...s.dirty, [boardId]: true }
+      }
     })
   },
 
-  // --- frames / board ---
-  setActiveFrame: (frameId) =>
-    set({ activeFrameId: frameId, view: 'edit', selection: [], past: [], future: [] }),
-
-  addFrame: (device) => {
-    const { doc } = get()
-    if (!doc) return
-    const offset = doc.frames.length
-    const frame = emptyFrame(nanoid(10), `Screen ${doc.frames.length + 1}`, device, {
-      x: 80 + offset * 60,
-      y: 80 + offset * 40
-    })
-    set({ doc: { ...doc, frames: [...doc.frames, frame] }, activeFrameId: frame.id, view: 'edit', dirty: true, selection: [], past: [], future: [] })
-  },
-
-  renameFrame: (frameId, name) => {
-    const { doc } = get()
-    if (!doc) return
-    set({ doc: { ...doc, frames: doc.frames.map((f) => (f.id === frameId ? { ...f, name } : f)) }, dirty: true })
-  },
-
-  deleteFrame: (frameId) => {
-    const { doc, activeFrameId } = get()
-    if (!doc || doc.frames.length <= 1) return
-    const frames = doc.frames.filter((f) => f.id !== frameId)
-    const connectors = doc.connectors.filter((c) => c.from !== frameId && c.to !== frameId)
-    const nextActive = activeFrameId === frameId ? frames[0]?.id ?? null : activeFrameId
-    set({ doc: { ...doc, frames, connectors }, activeFrameId: nextActive, dirty: true, selection: [] })
-  },
-
-  setFrameDevice: (device) => {
-    const { doc, activeFrameId } = get()
-    if (!doc || !activeFrameId) return
-    get().checkpoint()
-    const f = DEVICE_FRAMES[device]
-    const frames = doc.frames.map((fr) =>
-      fr.id === activeFrameId
-        ? {
-            ...fr,
-            device,
-            canvas: { width: f.width, height: f.height },
-            root: { ...fr.root, layout: { ...fr.root.layout, w: f.width, h: f.height } }
+  removeScreenFromBoard: (boardId, screenId) => {
+    set((s) => {
+      const board = s.boards[boardId]
+      if (!board) return {}
+      return {
+        boards: {
+          ...s.boards,
+          [boardId]: {
+            ...board,
+            items: board.items.filter((i) => i.screenId !== screenId),
+            connectors: board.connectors.filter((c) => c.from !== screenId && c.to !== screenId)
           }
-        : fr
-    )
-    set({ doc: { ...doc, frames }, dirty: true })
+        },
+        dirty: { ...s.dirty, [boardId]: true }
+      }
+    })
   },
 
-  moveFrameOnBoard: (frameId, x, y) => {
-    const { doc } = get()
-    if (!doc) return
-    set({ doc: { ...doc, frames: doc.frames.map((f) => (f.id === frameId ? { ...f, board: { x, y } } : f)) }, dirty: true })
+  moveBoardItem: (boardId, screenId, x, y) => {
+    set((s) => {
+      const board = s.boards[boardId]
+      if (!board) return {}
+      return {
+        boards: {
+          ...s.boards,
+          [boardId]: {
+            ...board,
+            items: board.items.map((i) => (i.screenId === screenId ? { ...i, x, y } : i))
+          }
+        },
+        dirty: { ...s.dirty, [boardId]: true }
+      }
+    })
   },
 
-  setView: (view) => set({ view, selection: [] }),
-
-  addConnector: (from, to) => {
-    const { doc } = get()
-    if (!doc || from === to) return
-    if (doc.connectors.some((c) => c.from === from && c.to === to)) return
-    set({ doc: { ...doc, connectors: [...doc.connectors, { id: nanoid(8), from, to }] }, dirty: true })
+  addConnector: (boardId, from, to) => {
+    set((s) => {
+      const board = s.boards[boardId]
+      if (!board || from === to) return {}
+      if (board.connectors.some((c) => c.from === from && c.to === to)) return {}
+      return {
+        boards: {
+          ...s.boards,
+          [boardId]: { ...board, connectors: [...board.connectors, { id: nanoid(8), from, to }] }
+        },
+        dirty: { ...s.dirty, [boardId]: true }
+      }
+    })
   },
 
-  updateConnector: (id, patch) => {
-    const { doc } = get()
-    if (!doc) return
-    set({ doc: { ...doc, connectors: doc.connectors.map((c) => (c.id === id ? { ...c, ...patch } : c)) }, dirty: true })
+  updateConnector: (boardId, id, patch) => {
+    set((s) => {
+      const board = s.boards[boardId]
+      if (!board) return {}
+      return {
+        boards: {
+          ...s.boards,
+          [boardId]: { ...board, connectors: board.connectors.map((c) => (c.id === id ? { ...c, ...patch } : c)) }
+        },
+        dirty: { ...s.dirty, [boardId]: true }
+      }
+    })
   },
 
-  deleteConnector: (id) => {
-    const { doc } = get()
-    if (!doc) return
-    set({ doc: { ...doc, connectors: doc.connectors.filter((c) => c.id !== id) }, dirty: true })
+  deleteConnector: (boardId, id) => {
+    set((s) => {
+      const board = s.boards[boardId]
+      if (!board) return {}
+      return {
+        boards: { ...s.boards, [boardId]: { ...board, connectors: board.connectors.filter((c) => c.id !== id) } },
+        dirty: { ...s.dirty, [boardId]: true }
+      }
+    })
   },
 
   // --- component editor ---
@@ -393,8 +486,7 @@ export const useEditor = create<EditorState>((set, get) => ({
     if (d) set({ componentDraft: { ...d, name } })
   },
 
-  closeComponentEditor: () =>
-    set({ componentDraft: null, draftRoot: null, selection: [], past: [], future: [] }),
+  closeComponentEditor: () => set({ componentDraft: null, draftRoot: null, selection: [], past: [], future: [] }),
 
   saveComponentDraft: async () => {
     const { projectId, componentDraft, draftRoot } = get()
@@ -441,9 +533,7 @@ export const useEditor = create<EditorState>((set, get) => ({
   setSelection: (ids) => set({ selection: ids }),
   toggleSelection: (id) =>
     set((s) =>
-      s.selection.includes(id)
-        ? { selection: s.selection.filter((x) => x !== id) }
-        : { selection: [...s.selection, id] }
+      s.selection.includes(id) ? { selection: s.selection.filter((x) => x !== id) } : { selection: [...s.selection, id] }
     ),
 
   insertPrimitive: (type, at, parentId = 'root') => {
@@ -638,12 +728,30 @@ export const useEditor = create<EditorState>((set, get) => ({
   },
 
   // --- device / notes / zoom ---
-  setZoom: (zoom) => set({ zoom }),
-  setNotes: (notes) => {
-    const { doc } = get()
-    if (!doc) return
-    set({ doc: { ...doc, notes }, dirty: true })
+  setDevice: (device) => {
+    const s = get()
+    const sc = activeScreen(s)
+    if (!sc) return
+    get().checkpoint()
+    const f = DEVICE_FRAMES[device]
+    const next: Screen = {
+      ...sc,
+      device,
+      canvas: { width: f.width, height: f.height },
+      root: { ...sc.root, layout: { ...sc.root.layout, w: f.width, h: f.height } }
+    }
+    set({ screens: { ...s.screens, [sc.id]: next }, dirty: { ...s.dirty, [sc.id]: true } })
   },
+
+  setZoom: (zoom) => set({ zoom }),
+
+  setNotes: (notes) => {
+    const s = get()
+    const sc = activeScreen(s)
+    if (!sc) return
+    set({ screens: { ...s.screens, [sc.id]: { ...sc, notes } }, dirty: { ...s.dirty, [sc.id]: true } })
+  },
+
   toggleNotes: () => set((s) => ({ notesOpen: !s.notesOpen })),
 
   // --- library ---
@@ -680,18 +788,34 @@ export const useEditor = create<EditorState>((set, get) => ({
   },
 
   // --- persistence ---
-  saveScreen: async () => {
-    const { projectId, doc } = get()
-    if (!projectId || !doc) return
+  saveActive: async () => {
+    const { projectId, activeTab } = get()
+    if (!projectId || !activeTab) return
     set({ saving: true })
     try {
-      await api.saveScreen(projectId, doc.id, {
-        name: doc.name,
-        notes: doc.notes,
-        frames: doc.frames,
-        connectors: doc.connectors
-      })
-      set({ dirty: false })
+      if (activeTab.kind === 'screen') {
+        const sc = get().screens[activeTab.id]
+        if (sc) {
+          await api.saveScreen(projectId, sc.id, {
+            name: sc.name,
+            device: sc.device,
+            canvas: sc.canvas,
+            root: sc.root,
+            notes: sc.notes
+          })
+        }
+      } else {
+        const board = get().boards[activeTab.id]
+        if (board) {
+          await api.saveBoard(projectId, board.id, {
+            name: board.name,
+            notes: board.notes,
+            items: board.items,
+            connectors: board.connectors
+          })
+        }
+      }
+      set((s) => ({ dirty: { ...s.dirty, [activeTab.id]: false } }))
     } finally {
       set({ saving: false })
     }
@@ -699,10 +823,12 @@ export const useEditor = create<EditorState>((set, get) => ({
 
   // --- collaboration ---
   setCollaborators: (c) => set({ collaborators: c }),
-  applyRemoteRoot: (frameId, root) => {
-    const { doc } = get()
-    if (!doc) return
-    set({ doc: { ...doc, frames: doc.frames.map((f) => (f.id === frameId ? { ...f, root } : f)) }, dirty: true })
+  applyRemoteRoot: (screenId, root) => {
+    set((s) => {
+      const sc = s.screens[screenId]
+      if (!sc) return {}
+      return { screens: { ...s.screens, [screenId]: { ...sc, root } }, dirty: { ...s.dirty, [screenId]: true } }
+    })
   },
   setRemoteCursor: (id, data) => set((s) => ({ remoteCursors: { ...s.remoteCursors, [id]: data } })),
   pruneCursors: (presentIds) =>

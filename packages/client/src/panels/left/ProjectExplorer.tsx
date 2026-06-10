@@ -8,7 +8,7 @@ export function ProjectExplorer() {
   const projectId = useEditor((s) => s.projectId)
   const projectName = useEditor((s) => s.projectName)
   const tree = useEditor((s) => s.tree)
-  const doc = useEditor((s) => s.doc)
+  const activeTab = useEditor((s) => s.activeTab)
   const loadProjects = useEditor((s) => s.loadProjects)
   const openProject = useEditor((s) => s.openProject)
   const createProject = useEditor((s) => s.createProject)
@@ -16,6 +16,7 @@ export function ProjectExplorer() {
   const renameNode = useEditor((s) => s.renameNode)
   const deleteNode = useEditor((s) => s.deleteNode)
   const openScreen = useEditor((s) => s.openScreen)
+  const openBoard = useEditor((s) => s.openBoard)
 
   const [projects, setProjects] = useState<Project[]>([])
 
@@ -45,6 +46,23 @@ export function ProjectExplorer() {
     await createNode('screen', name.trim(), parentId, device)
   }
 
+  const onNewBoard = async (parentId: string | null) => {
+    const name = window.prompt(t.promptBoardName)
+    if (!name) return
+    await createNode('board', name.trim(), parentId)
+  }
+
+  const openNode = (node: TreeNode) => {
+    if (node.type === 'screen' && node.screenId) void openScreen(node.screenId)
+    else if (node.type === 'board' && node.boardId) void openBoard(node.boardId)
+  }
+
+  const isActive = (node: TreeNode) =>
+    (node.type === 'screen' && activeTab?.kind === 'screen' && activeTab.id === node.screenId) ||
+    (node.type === 'board' && activeTab?.kind === 'board' && activeTab.id === node.boardId)
+
+  const iconOf = (node: TreeNode) => (node.type === 'folder' ? '📁' : node.type === 'board' ? '🗺' : '📄')
+
   const onRename = async (node: TreeNode) => {
     const name = window.prompt(t.rename, node.name)
     if (!name) return
@@ -63,17 +81,18 @@ export function ProjectExplorer() {
     childrenOf(parentId).map((node) => (
       <div key={node.id}>
         <div
-          className={`tree-row${doc?.id === node.screenId && node.type === 'screen' ? ' active' : ''}`}
+          className={`tree-row${isActive(node) ? ' active' : ''}`}
           style={{ paddingLeft: 8 + depth * 14 }}
-          onClick={() => node.type === 'screen' && node.screenId && void openScreen(node.screenId)}
+          onClick={() => openNode(node)}
         >
-          <span className="tree-icon">{node.type === 'folder' ? '📁' : '📄'}</span>
+          <span className="tree-icon">{iconOf(node)}</span>
           <span className="tree-name">{node.name}</span>
           <span className="tree-actions">
             {node.type === 'folder' && (
               <>
                 <button title={t.newFolder} onClick={(e) => { e.stopPropagation(); void onNewFolder(node.id) }}>＋📁</button>
                 <button title={t.newScreen} onClick={(e) => { e.stopPropagation(); void onNewScreen(node.id) }}>＋📄</button>
+                <button title={t.newBoard} onClick={(e) => { e.stopPropagation(); void onNewBoard(node.id) }}>＋🗺</button>
               </>
             )}
             <button title={t.rename} onClick={(e) => { e.stopPropagation(); void onRename(node) }}>✎</button>
@@ -112,6 +131,7 @@ export function ProjectExplorer() {
             <span className="spacer" />
             <button title={t.newFolder} onClick={() => void onNewFolder(null)}>＋📁</button>
             <button title={t.newScreen} onClick={() => void onNewScreen(null)}>＋📄</button>
+            <button title={t.newBoard} onClick={() => void onNewBoard(null)}>＋🗺</button>
           </div>
           <div className="tree">{renderNodes(null, 0)}</div>
         </>
