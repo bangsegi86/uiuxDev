@@ -35,11 +35,27 @@ export function App() {
   const selection = useEditor((s) => s.selection)
   const collaborators = useEditor((s) => s.collaborators)
   const editComponentFromSelection = useEditor((s) => s.editComponentFromSelection)
+  const error = useEditor((s) => s.error)
+  const setError = useEditor((s) => s.setError)
+
+  // Warn before leaving the page while any open document has unsaved changes.
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (Object.values(useEditor.getState().dirty).some(Boolean)) {
+        e.preventDefault()
+        e.returnValue = ''
+      }
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [])
 
   if (!authReady) return <div className="center-empty">…</div>
   if (!user) return <AuthScreen />
 
   const isScreenTab = activeTab?.kind === 'screen'
+  const others = collaborators.filter((c) => c.id !== user.id)
+  const errorText = error ? (t as Record<string, string>)[error] ?? error : null
 
   return (
     <div className="app">
@@ -49,14 +65,14 @@ export function App() {
         {selection.length > 0 && !componentDraft && isScreenTab && (
           <button onClick={editComponentFromSelection}>{t.groupAsComponent}</button>
         )}
-        {collaborators.length > 1 && (
-          <span className="presence" title={collaborators.map((c) => c.email).join(', ')}>
-            {collaborators.slice(0, 4).map((c) => (
+        {others.length > 0 && (
+          <span className="presence" title={others.map((c) => c.email).join(', ')}>
+            {others.slice(0, 4).map((c) => (
               <span key={c.id} className="avatar" title={c.email}>
                 {c.email[0]?.toUpperCase()}
               </span>
             ))}
-            <span className="presence-label">{collaborators.length} {t.editing}</span>
+            <span className="presence-label">{others.length} {t.editing}</span>
           </span>
         )}
         <span className="lang-switch">
@@ -72,6 +88,13 @@ export function App() {
           <button onClick={logout}>{t.logout}</button>
         </span>
       </header>
+
+      {errorText && (
+        <div className="error-banner" role="alert">
+          <span>⚠️ {errorText}</span>
+          <button onClick={() => setError(null)}>✕</button>
+        </div>
+      )}
 
       <div className="app-body">
         <LeftPanel />

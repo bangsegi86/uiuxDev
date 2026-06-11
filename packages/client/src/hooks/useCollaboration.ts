@@ -64,9 +64,18 @@ export function useCollaboration() {
       }
     }
     ws.onclose = () => setCollaborators([])
+    ws.onerror = () => {
+      // Collaboration is best-effort; a dropped socket must not break editing.
+      try {
+        ws.close()
+      } catch {
+        // already closing
+      }
+    }
 
     return () => {
       setCursorSender(null)
+      clearTimeout(sendTimer.current)
       ws.close()
       wsRef.current = null
       setCollaborators([])

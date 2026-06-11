@@ -79,6 +79,10 @@ interface EditorState {
   collaborators: { id: string; email: string }[]
   remoteCursors: Record<string, { email: string; x: number; y: number }>
 
+  /** i18n key of the last surfaced error (shown as a dismissible banner). */
+  error: string | null
+  setError: (key: string | null) => void
+
   // --- workspace ---
   loadProjects: () => Promise<Project[]>
   openProject: (id: string) => Promise<void>
@@ -226,6 +230,9 @@ export const useEditor = create<EditorState>((set, get) => ({
   future: [],
   collaborators: [],
   remoteCursors: {},
+  error: null,
+
+  setError: (key) => set({ error: key }),
 
   // --- surface helpers ---
   getRoot: () => selectRoot(get()),
@@ -245,8 +252,17 @@ export const useEditor = create<EditorState>((set, get) => ({
   loadProjects: async () => api.listProjects(),
 
   openProject: async (id) => {
-    const { project, tree } = await api.getProject(id)
-    const [components, templates] = await Promise.all([api.listComponents(id), api.listTemplates(id)])
+    // Don't discard the current workspace until the new one loads successfully.
+    let loaded
+    try {
+      const { project, tree } = await api.getProject(id)
+      const [components, templates] = await Promise.all([api.listComponents(id), api.listTemplates(id)])
+      loaded = { project, tree, components, templates }
+    } catch {
+      get().setError('errLoad')
+      return
+    }
+    const { project, tree, components, templates } = loaded
     set({
       projectId: id,
       projectName: project.name,
@@ -336,8 +352,13 @@ export const useEditor = create<EditorState>((set, get) => ({
     const { projectId, screens } = get()
     if (!projectId) return
     if (!screens[screenId]) {
-      const screen = await api.getScreen(projectId, screenId)
-      set((s) => ({ screens: { ...s.screens, [screenId]: screen } }))
+      try {
+        const screen = await api.getScreen(projectId, screenId)
+        set((s) => ({ screens: { ...s.screens, [screenId]: screen } }))
+      } catch {
+        get().setError('errLoad')
+        return
+      }
     }
     get().setActiveTab({ kind: 'screen', id: screenId })
   },
@@ -347,10 +368,15 @@ export const useEditor = create<EditorState>((set, get) => ({
     if (!projectId) return
     let board = boards[boardId]
     if (!board) {
-      const loaded = await api.getBoard(projectId, boardId)
-      // normalize older boards that predate `elements`
-      board = { ...loaded, items: loaded.items ?? [], connectors: loaded.connectors ?? [], elements: loaded.elements ?? [] }
-      set((s) => ({ boards: { ...s.boards, [boardId]: board } }))
+      try {
+        const loaded = await api.getBoard(projectId, boardId)
+        // normalize older boards that predate `elements`
+        board = { ...loaded, items: loaded.items ?? [], connectors: loaded.connectors ?? [], elements: loaded.elements ?? [] }
+        set((s) => ({ boards: { ...s.boards, [boardId]: board } }))
+      } catch {
+        get().setError('errLoad')
+        return
+      }
     }
     // preload referenced screens so the board can render previews
     for (const item of board.items) {
@@ -579,14 +605,18 @@ export const useEditor = create<EditorState>((set, get) => ({
     const { projectId, componentDraft, draftRoot } = get()
     if (!projectId || !componentDraft || !draftRoot) return
     const name = componentDraft.name.trim() || 'Component'
-    if (componentDraft.id) {
-      const updated = await api.updateComponent(projectId, componentDraft.id, name, draftRoot)
-      set((s) => ({ components: s.components.map((c) => (c.id === updated.id ? updated : c)) }))
-    } else {
-      const created = await api.createComponent(projectId, name, draftRoot)
-      set((s) => ({ components: [...s.components, created] }))
+    try {
+      if (componentDraft.id) {
+        const updated = await api.updateComponent(projectId, componentDraft.id, name, draftRoot)
+        set((s) => ({ components: s.components.map((c) => (c.id === updated.id ? updated : c)) }))
+      } else {
+        const created = await api.createComponent(projectId, name, draftRoot)
+        set((s) => ({ components: [...s.components, created] }))
+      }
+      get().closeComponentEditor()
+    } catch {
+      get().setError('errSave')
     }
-    get().closeComponentEditor()
   },
 
   // --- history ---
@@ -604,7 +634,7 @@ export const useEditor = create<EditorState>((set, get) => ({
     if (!past.length || !root) return
     const prev = past[past.length - 1]
     get().setRoot(prev)
-    set({ past: past.slice(0, -1), future: [root, ...future], selection: [] })
+    set({ past: past.slice(0, -1), future: [root, ...future].slice(0, 50), selection: [] })
   },
 
   redo: () => {
@@ -860,8 +890,12 @@ export const useEditor = create<EditorState>((set, get) => ({
   deleteComponent: async (id) => {
     const { projectId } = get()
     if (!projectId) return
-    await api.deleteComponent(projectId, id)
-    set((s) => ({ components: s.components.filter((c) => c.id !== id) }))
+    try {
+      await api.deleteComponent(projectId, id)
+      set((s) => ({ components: s.components.filter((c) => c.id !== id) }))
+    } catch {
+      get().setError('errDelete')
+    }
   },
 
   saveAsTemplate: async (name) => {
@@ -869,8 +903,12 @@ export const useEditor = create<EditorState>((set, get) => ({
     const root = get().getRoot()
     const surface = selectSurface(get())
     if (!projectId || !root || !surface) return
-    const template = await api.createTemplate(projectId, name, surface.device, root)
-    set((s) => ({ templates: [...s.templates, template] }))
+    try {
+      const template = await api.createTemplate(projectId, name, surface.device, root)
+      set((s) => ({ templates: [...s.templates, template] }))
+    } catch {
+      get().setError('errSave')
+    }
   },
 
   applyTemplate: (template) => {
@@ -885,8 +923,12 @@ export const useEditor = create<EditorState>((set, get) => ({
   deleteTemplate: async (id) => {
     const { projectId } = get()
     if (!projectId) return
-    await api.deleteTemplate(projectId, id)
-    set((s) => ({ templates: s.templates.filter((t) => t.id !== id) }))
+    try {
+      await api.deleteTemplate(projectId, id)
+      set((s) => ({ templates: s.templates.filter((t) => t.id !== id) }))
+    } catch {
+      get().setError('errDelete')
+    }
   },
 
   // --- persistence ---
@@ -918,7 +960,10 @@ export const useEditor = create<EditorState>((set, get) => ({
           })
         }
       }
+      // Only mark clean once the server confirms the write.
       set((s) => ({ dirty: { ...s.dirty, [activeTab.id]: false } }))
+    } catch {
+      get().setError('errSave')
     } finally {
       set({ saving: false })
     }

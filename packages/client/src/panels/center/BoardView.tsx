@@ -1,10 +1,26 @@
-import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { memo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import type { Board, BoardElement, BoardItem, Screen } from '@uiux/shared'
 import { useEditor } from '../../state/editorStore'
 import { useI18n } from '../../i18n/I18nContext'
 import { renderStaticTree } from '../../componentRegistry'
 import { AddScreenModal } from './AddScreenModal'
 import { api } from '../../lib/apiClient'
+
+/**
+ * Scaled static preview of a screen. Memoized on the screen reference so moving
+ * board items (which doesn't change a screen) never re-renders every preview's
+ * full node tree — important for boards holding many screens.
+ */
+const ScreenPreview = memo(function ScreenPreview({ screen, scale }: { screen: Screen; scale: number }) {
+  return (
+    <div
+      className="board-frame-preview"
+      style={{ width: screen.canvas.width, height: screen.canvas.height, transform: `scale(${scale})`, transformOrigin: 'top left' }}
+    >
+      {screen.root.children.map(renderStaticTree)}
+    </div>
+  )
+})
 
 const SCALE = 0.26
 
@@ -248,19 +264,7 @@ export function BoardView({ board }: { board: Board }) {
                   </button>
                 </div>
                 <div className="board-frame-canvas" style={{ width: b.w, height: b.h }}>
-                  {screen && (
-                    <div
-                      className="board-frame-preview"
-                      style={{
-                        width: screen.canvas.width,
-                        height: screen.canvas.height,
-                        transform: `scale(${SCALE})`,
-                        transformOrigin: 'top left'
-                      }}
-                    >
-                      {screen.root.children.map(renderStaticTree)}
-                    </div>
-                  )}
+                  {screen && <ScreenPreview screen={screen} scale={SCALE} />}
                 </div>
               </div>
             )

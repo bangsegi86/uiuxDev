@@ -1009,6 +1009,26 @@ textarea {
   color: var(--accent);
 }
 
+/* ---- error banner ---- */
+.error-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 16px;
+  background: #fef2f2;
+  border-bottom: 1px solid #fecaca;
+  color: #b91c1c;
+  font-size: 13px;
+}
+.error-banner button {
+  border: none;
+  background: transparent;
+  color: #b91c1c;
+  cursor: pointer;
+  font-size: 14px;
+}
+
 /* ---- error boundary ---- */
 .error-boundary {
   padding: 40px;
