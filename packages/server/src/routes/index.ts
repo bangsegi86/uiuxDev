@@ -20,6 +20,7 @@ import {
   type TreeNode
 } from '@uiux/shared'
 import { hashPassword, signToken, userFromAuthHeader, verifyPassword } from '../auth.js'
+import { readUpload, saveDataUrl } from '../uploads.js'
 import type { StorageAdapter } from '../storage/index.js'
 
 const now = () => new Date().toISOString()
@@ -241,6 +242,32 @@ export async function registerRoutes(app: FastifyInstance, storage: StorageAdapt
       })
       if (!updated) return reply.code(404).send({ error: 'board not found' })
       return updated
+    }
+  )
+
+  // --- uploads (images) ---
+  app.post<{ Params: { projectId: string }; Body: { dataUrl?: string } }>(
+    '/api/projects/:projectId/uploads',
+    { bodyLimit: 12 * 1024 * 1024 },
+    async (req, reply) => {
+      const dataUrl = req.body?.dataUrl
+      if (typeof dataUrl !== 'string') return reply.code(400).send({ error: 'dataUrl required' })
+      try {
+        const url = await saveDataUrl(req.params.projectId, dataUrl)
+        return reply.code(201).send({ url })
+      } catch (err) {
+        return reply.code(400).send({ error: (err as Error).message })
+      }
+    }
+  )
+
+  // Public (no auth) so <img src> can load it; ids are unguessable.
+  app.get<{ Params: { projectId: string; file: string } }>(
+    '/api/uploads/:projectId/:file',
+    async (req, reply) => {
+      const found = await readUpload(req.params.projectId, req.params.file)
+      if (!found) return reply.code(404).send({ error: 'not found' })
+      return reply.header('Cache-Control', 'public, max-age=31536000, immutable').type(found.mime).send(found.buf)
     }
   )
 

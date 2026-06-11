@@ -74,6 +74,8 @@ export const api = {
     http<Board>('GET', routes.board(projectId, boardId)),
   saveBoard: (projectId: string, boardId: string, patch: Partial<Board>) =>
     http<Board>('PUT', routes.board(projectId, boardId), patch),
+  uploadImage: (projectId: string, dataUrl: string) =>
+    http<{ url: string }>('POST', routes.uploads(projectId), { dataUrl }),
 
   listComponents: (projectId: string) =>
     http<CustomComponent[]>('GET', routes.components(projectId)),

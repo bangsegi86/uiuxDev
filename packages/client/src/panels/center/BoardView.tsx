@@ -4,6 +4,7 @@ import { useEditor } from '../../state/editorStore'
 import { useI18n } from '../../i18n/I18nContext'
 import { renderStaticTree } from '../../componentRegistry'
 import { AddScreenModal } from './AddScreenModal'
+import { api } from '../../lib/apiClient'
 
 const SCALE = 0.26
 
@@ -29,11 +30,13 @@ function itemBox(item: BoardItem, screen: Screen | undefined) {
 /** The flow board: screens placed as thumbnails, linked by connectors. */
 export function BoardView({ board }: { board: Board }) {
   const { t } = useI18n()
+  const projectId = useEditor((s) => s.projectId)
   const screens = useEditor((s) => s.screens)
   const dirty = useEditor((s) => Boolean(s.dirty[board.id]))
   const saving = useEditor((s) => s.saving)
   const moveBoardItem = useEditor((s) => s.moveBoardItem)
   const addConnector = useEditor((s) => s.addConnector)
+  const updateConnector = useEditor((s) => s.updateConnector)
   const deleteConnector = useEditor((s) => s.deleteConnector)
   const removeScreenFromBoard = useEditor((s) => s.removeScreenFromBoard)
   const updateBoardElement = useEditor((s) => s.updateBoardElement)
@@ -106,12 +109,27 @@ export function BoardView({ board }: { board: Board }) {
     ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
   }
 
-  /** Read a picked image file as a data URL and store it on the element. */
+  /** Upload a picked image to the server, storing the returned URL (falls back
+   *  to an inline data URL if the upload fails). */
   const onPickImage = (id: string, file: File | undefined | null) => {
     if (!file) return
     const reader = new FileReader()
-    reader.onload = () => updateBoardElement(board.id, id, { src: String(reader.result) })
+    reader.onload = async () => {
+      const dataUrl = String(reader.result)
+      try {
+        if (!projectId) throw new Error('no project')
+        const { url } = await api.uploadImage(projectId, dataUrl)
+        updateBoardElement(board.id, id, { src: url })
+      } catch {
+        updateBoardElement(board.id, id, { src: dataUrl })
+      }
+    }
     reader.readAsDataURL(file)
+  }
+
+  const editConnectorLabel = (id: string, current: string) => {
+    const v = window.prompt(t.connectorLabel, current)
+    if (v !== null) updateConnector(board.id, id, { label: v })
   }
 
   const onUp = (e: ReactPointerEvent) => {
@@ -164,17 +182,24 @@ export function BoardView({ board }: { board: Board }) {
                 <g
                   key={c.id}
                   className="board-connector"
-                  onClick={() => {
+                  onDoubleClick={() => editConnectorLabel(c.id, c.label ?? '')}
+                  onContextMenu={(e) => {
+                    e.preventDefault()
                     if (window.confirm(t.confirmDelete)) deleteConnector(board.id, c.id)
                   }}
                 >
-                  <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="transparent" strokeWidth={12} />
+                  <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="transparent" strokeWidth={12}>
+                    <title>{t.connectorHintEdit}</title>
+                  </line>
                   <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="#64748b" strokeWidth={1.5} markerEnd="url(#arrow)" />
-                  {c.label && (
-                    <text x={(a.x + b.x) / 2} y={(a.y + b.y) / 2 - 4} className="board-connector-label">
-                      {c.label}
-                    </text>
-                  )}
+                  <text
+                    x={(a.x + b.x) / 2}
+                    y={(a.y + b.y) / 2 - 4}
+                    className="board-connector-label"
+                    onClick={() => editConnectorLabel(c.id, c.label ?? '')}
+                  >
+                    {c.label || '＋'}
+                  </text>
                 </g>
               )
             })}
@@ -250,6 +275,38 @@ export function BoardView({ board }: { board: Board }) {
               <div className="board-el-head" onPointerDown={(e) => onElementHeadDown(e, el)}>
                 <span className="board-el-grip">⠿</span>
                 <span className="spacer" />
+                {(el.kind === 'memo' || el.kind === 'text') && (
+                  <>
+                    <button
+                      className="board-el-tool"
+                      title={t.fontSmaller}
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onClick={() => updateBoardElement(board.id, el.id, { fontSize: Math.max(8, (el.fontSize ?? 13) - 1) })}
+                    >
+                      A−
+                    </button>
+                    <button
+                      className="board-el-tool"
+                      title={t.fontLarger}
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onClick={() => updateBoardElement(board.id, el.id, { fontSize: Math.min(48, (el.fontSize ?? 13) + 1) })}
+                    >
+                      A+
+                    </button>
+                    <button
+                      className="board-el-tool"
+                      title={t.align}
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onClick={() =>
+                        updateBoardElement(board.id, el.id, {
+                          align: el.align === 'left' || !el.align ? 'center' : el.align === 'center' ? 'right' : 'left'
+                        })
+                      }
+                    >
+                      {el.align === 'center' ? '↔' : el.align === 'right' ? '⇥' : '⇤'}
+                    </button>
+                  </>
+                )}
                 {el.kind === 'memo' && (
                   <input
                     className="board-el-color"
@@ -294,6 +351,7 @@ export function BoardView({ board }: { board: Board }) {
               ) : (
                 <textarea
                   className="board-el-text"
+                  style={{ fontSize: el.fontSize ?? 13, textAlign: el.align ?? 'left' }}
                   value={el.text ?? ''}
                   placeholder={t.editText}
                   onChange={(e) => updateBoardElement(board.id, el.id, { text: e.target.value })}

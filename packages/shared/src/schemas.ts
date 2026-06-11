@@ -66,7 +66,9 @@ export const boardElementSchema = z.object({
   h: z.number(),
   text: z.string().optional(),
   src: z.string().optional(),
-  color: z.string().optional()
+  color: z.string().optional(),
+  fontSize: z.number().optional(),
+  align: z.enum(['left', 'center', 'right']).optional()
 })
 
 /** Save a single screen design. */

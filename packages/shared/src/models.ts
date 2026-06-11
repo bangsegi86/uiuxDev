@@ -142,6 +142,8 @@ export interface BoardElement {
   text?: string
   src?: string
   color?: string
+  fontSize?: number
+  align?: 'left' | 'center' | 'right'
 }
 
 /**

@@ -13,6 +13,7 @@ export const routes = {
   treeNode: (projectId: string, nodeId: string) => `/api/projects/${projectId}/tree/${nodeId}`,
   screen: (projectId: string, screenId: string) => `/api/projects/${projectId}/screens/${screenId}`,
   board: (projectId: string, boardId: string) => `/api/projects/${projectId}/boards/${boardId}`,
+  uploads: (projectId: string) => `/api/projects/${projectId}/uploads`,
   components: (projectId: string) => `/api/projects/${projectId}/components`,
   component: (projectId: string, id: string) => `/api/projects/${projectId}/components/${id}`,
   templates: (projectId: string) => `/api/projects/${projectId}/templates`,

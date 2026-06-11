@@ -687,6 +687,12 @@ textarea {
 .board-connector-label {
   font-size: 11px;
   fill: #475569;
+  pointer-events: all;
+  cursor: pointer;
+  paint-order: stroke;
+  stroke: #fff;
+  stroke-width: 3px;
+  text-anchor: middle;
 }
 .board-frame {
   position: absolute;
@@ -771,8 +777,8 @@ textarea {
 .board-el-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  height: 18px;
+  gap: 2px;
+  height: 22px;
   background: rgba(0, 0, 0, 0.06);
   cursor: move;
   padding: 0 4px;
