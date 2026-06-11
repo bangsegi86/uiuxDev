@@ -1,4 +1,5 @@
 import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { isContainerType, isSpecEmpty, type ElementSpec, type Layout, type NodeInstance } from '@uiux/shared'
 import { selectRoot, selectSurface, useEditor } from '../../state/editorStore'
 import { useI18n } from '../../i18n/I18nContext'
@@ -58,7 +59,7 @@ const HANDLES = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'] as const
 export function Canvas() {
   const { t } = useI18n()
   const root = useEditor(selectRoot)
-  const surface = useEditor(selectSurface)
+  const surface = useEditor(useShallow(selectSurface))
   const selection = useEditor((s) => s.selection)
   const zoom = useEditor((s) => s.zoom)
   const setSelection = useEditor((s) => s.setSelection)

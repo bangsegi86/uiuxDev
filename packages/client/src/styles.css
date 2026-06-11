@@ -903,6 +903,25 @@ textarea {
   color: var(--accent);
 }
 
+/* ---- error boundary ---- */
+.error-boundary {
+  padding: 40px;
+  max-width: 720px;
+  margin: 40px auto;
+  font-family: system-ui, sans-serif;
+}
+.error-boundary pre {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+  padding: 12px;
+  border-radius: 8px;
+  white-space: pre-wrap;
+}
+.error-boundary button {
+  margin-right: 8px;
+}
+
 /* ---- developer spec ---- */
 .spec-badge {
   position: absolute;

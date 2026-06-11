@@ -1,3 +1,4 @@
+import { useShallow } from 'zustand/react/shallow'
 import { selectSurface, useEditor } from '../../state/editorStore'
 import { useI18n } from '../../i18n/I18nContext'
 import { downloadScreenHtml } from '../../lib/htmlExport'
@@ -7,7 +8,7 @@ export function DeviceToolbar() {
   const { t } = useI18n()
   const activeTab = useEditor((s) => s.activeTab)
   const screen = useEditor((s) => (s.activeTab?.kind === 'screen' ? s.screens[s.activeTab.id] : undefined))
-  const surface = useEditor(selectSurface)
+  const surface = useEditor(useShallow(selectSurface))
   const components = useEditor((s) => s.components)
   const setDevice = useEditor((s) => s.setDevice)
   const zoom = useEditor((s) => s.zoom)
