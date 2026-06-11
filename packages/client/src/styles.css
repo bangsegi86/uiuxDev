@@ -485,30 +485,36 @@ textarea:focus {
   justify-content: space-between;
 }
 .palette-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
-}
-.palette-item {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 10px 6px;
   display: flex;
   flex-direction: column;
+  gap: 1px;
+}
+.palette-item {
+  display: flex;
+  flex-direction: row;
   align-items: center;
-  gap: 4px;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 4px 6px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
   cursor: grab;
-  background: #fff;
 }
 .palette-item:hover {
-  border-color: var(--accent);
   background: var(--accent-soft);
 }
 .palette-icon {
-  font-size: 18px;
+  font-size: 15px;
+  width: 18px;
+  text-align: center;
+  flex: 0 0 auto;
 }
 .palette-label {
-  font-size: 11px;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .palette-label.grow {
   flex: 1;
@@ -516,25 +522,33 @@ textarea:focus {
 .palette-list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 1px;
 }
 .palette-row,
 .template-row {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 8px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
+  gap: 8px;
+  padding: 4px 6px;
+  border: none;
+  border-radius: 4px;
   cursor: grab;
-  background: #fff;
+  background: transparent;
 }
 .palette-row:hover,
 .template-row:hover {
-  border-color: var(--accent);
+  background: var(--accent-soft);
 }
 .template-row {
   cursor: default;
+}
+.palette-row .icon-btn,
+.template-row .icon-btn {
+  opacity: 0;
+}
+.palette-row:hover .icon-btn,
+.template-row:hover .icon-btn {
+  opacity: 1;
 }
 .badge {
   font-size: 10px;
