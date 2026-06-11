@@ -153,8 +153,12 @@ ${inner}
       return `<div class="uiux-node" style="${box(node, 'display:flex;align-items:center;')}${style}">${escapeHtml(p.text ?? 'Text')}</div>`
     case 'button':
       return `<div class="uiux-node" style="${box(node)}"><button style="width:100%;height:100%;border:none;border-radius:6px;background:#2563eb;color:#fff;${style}">${escapeHtml(p.text ?? 'Button')}</button></div>`
-    case 'input':
-      return `<div class="uiux-node" style="${box(node)}"><input placeholder="${escapeHtml(p.placeholder ?? '')}" style="width:100%;height:100%;border:1px solid #cbd5e1;border-radius:6px;padding:0 8px;${style}" /></div>`
+    case 'input': {
+      const required = Boolean(node.props.required)
+      const border = required ? '#f87171' : '#cbd5e1'
+      const label = p.label ? `<span style="font-size:11px;line-height:1.2;">${escapeHtml(p.label)}${required ? ' <span style="color:#dc2626;">*</span>' : ''}</span>` : ''
+      return `<div class="uiux-node" style="${box(node, 'display:flex;flex-direction:column;gap:2px;')}">${label}<input placeholder="${escapeHtml(p.placeholder ?? '')}" ${node.props.readonly ? 'disabled' : ''} style="flex:1;min-height:0;box-sizing:border-box;border:1px solid ${border};border-radius:6px;padding:0 8px;${node.props.readonly ? 'background:#f1f5f9;' : ''}${style}" /></div>`
+    }
     case 'image':
       return p.src
         ? `<img class="uiux-node" src="${escapeHtml(p.src)}" alt="${escapeHtml(p.alt ?? '')}" style="${box(node, 'object-fit:cover;')}${style}" />`
@@ -224,8 +228,12 @@ ${inner}
         .join('')
       return `<div class="uiux-node" style="${box(node, 'display:flex;flex-direction:column;gap:4px;')}">${p.label ? `<div style="font-weight:600;">${escapeHtml(p.label)}${node.props.required ? ' *' : ''}</div>` : ''}${radios}</div>`
     }
-    case 'calendar':
-      return `<div class="uiux-node" style="${box(node)}"><div style="height:100%;display:flex;align-items:center;gap:6px;border:1px solid #cbd5e1;border-radius:6px;padding:0 8px;background:${node.props.readonly ? '#f1f5f9' : '#fff'};">📅 <span>${escapeHtml(p.value || p.placeholder || 'YYYY-MM-DD')}</span></div></div>`
+    case 'calendar': {
+      const required = Boolean(node.props.required)
+      const border = required ? '#f87171' : '#cbd5e1'
+      const label = p.label ? `<span style="font-size:11px;">${escapeHtml(p.label)}${required ? ' <span style="color:#dc2626;">*</span>' : ''}</span>` : ''
+      return `<div class="uiux-node" style="${box(node, 'display:flex;flex-direction:column;gap:2px;')}">${label}<div style="flex:1;min-height:0;display:flex;align-items:center;gap:6px;border:1px solid ${border};border-radius:6px;padding:0 8px;background:${node.props.readonly ? '#f1f5f9' : '#fff'};">📅 <span>${escapeHtml(p.value || p.placeholder || 'YYYY-MM-DD')}</span></div></div>`
+    }
     case 'grid':
       return `<div class="uiux-node" style="${box(node, 'overflow:auto;')}">${gridHtml(node)}</div>`
     case 'modal':

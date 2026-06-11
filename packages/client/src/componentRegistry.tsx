@@ -119,6 +119,7 @@ const ALERT_STYLES: Record<string, [string, string, string]> = {
 /** Render the inner content of a primitive (the outer positioned box is the canvas's job). */
 export function renderPrimitive(node: NodeInstance): React.ReactNode {
   const css = { ...fill, ...toCss(node.style) }
+  const visual = toCss(node.style)
   const p = node.props as Record<string, string>
 
   switch (node.type) {
@@ -130,14 +131,34 @@ export function renderPrimitive(node: NodeInstance): React.ReactNode {
           {p.text ?? 'Button'}
         </button>
       )
-    case 'input':
+    case 'input': {
+      const required = Boolean(node.props.required)
       return (
-        <input
-          readOnly
-          placeholder={p.placeholder ?? ''}
-          style={{ ...css, border: css.border ?? '1px solid #cbd5e1', borderRadius: css.borderRadius ?? 6, padding: css.padding ?? '0 8px' }}
-        />
+        <div style={{ ...css, display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {p.label ? (
+            <span style={{ fontSize: 11, lineHeight: 1.2 }}>
+              {p.label}
+              {required ? <span style={{ color: '#dc2626' }}> *</span> : null}
+            </span>
+          ) : null}
+          <input
+            readOnly
+            placeholder={p.placeholder ?? ''}
+            style={{
+              flex: 1,
+              minHeight: 0,
+              boxSizing: 'border-box',
+              border: required ? '1px solid #f87171' : (visual.border ?? '1px solid #cbd5e1'),
+              borderRadius: visual.borderRadius ?? 6,
+              padding: visual.padding ?? '0 8px',
+              background: node.props.readonly ? '#f1f5f9' : visual.background,
+              color: visual.color,
+              fontSize: visual.fontSize
+            }}
+          />
+        </div>
       )
+    }
     case 'image':
       return p.src ? (
         <img src={p.src} alt={p.alt ?? ''} style={{ ...css, objectFit: 'cover' }} />
@@ -183,7 +204,7 @@ export function renderPrimitive(node: NodeInstance): React.ReactNode {
               {node.props.required ? <span style={{ color: '#dc2626' }}> *</span> : null}
             </span>
           ) : null}
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 6, border: '1px solid #cbd5e1', borderRadius: 6, padding: '0 8px', background: node.props.readonly ? '#f1f5f9' : '#fff' }}>
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 6, border: node.props.required ? '1px solid #f87171' : '1px solid #cbd5e1', borderRadius: 6, padding: '0 8px', background: node.props.readonly ? '#f1f5f9' : '#fff' }}>
             <span>📅</span>
             <span style={{ color: p.value ? '#0f172a' : '#94a3b8' }}>{p.value || p.placeholder || 'YYYY-MM-DD'}</span>
           </div>
