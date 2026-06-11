@@ -1,4 +1,4 @@
-import type { CustomComponent, NodeInstance, Screen } from '@uiux/shared'
+import { isSpecEmpty, type CustomComponent, type ElementSpec, type NodeInstance, type Screen } from '@uiux/shared'
 
 /** Export a screen design to a self-contained, standalone HTML document. */
 export function exportScreenToHtml(screen: Screen, components: CustomComponent[]): string {
@@ -54,12 +54,39 @@ function camelToKebab(s: string): string {
   return s.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`)
 }
 
-function escapeHtml(s: string): string {
+export function escapeHtml(s: string): string {
   return s
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
+}
+
+/** `data-spec-*` attributes for the set fields of an element's developer spec. */
+function specAttrs(spec?: ElementSpec): string {
+  if (isSpecEmpty(spec)) return ''
+  const out: string[] = []
+  for (const [key, value] of Object.entries(spec!)) {
+    if (value === undefined || value === null || value === '') continue
+    out.push(`data-spec-${camelToKebab(key)}="${escapeHtml(String(value))}"`)
+  }
+  return out.length ? ' ' + out.join(' ') : ''
+}
+
+/** A leading HTML comment summarising the developer spec (skipped when empty). */
+function specComment(spec?: ElementSpec): string {
+  if (isSpecEmpty(spec)) return ''
+  const bits: string[] = []
+  if (spec!.behavior) bits.push(`behavior=${spec!.behavior}`)
+  if (spec!.devNote) bits.push(`note=${spec!.devNote}`)
+  if (spec!.ticketRef) bits.push(`ticket=${spec!.ticketRef}`)
+  return `<!-- DevSpec: ${escapeHtml(bits.join('; '))} -->\n`
+}
+
+/** Insert spec attributes into the first `.uiux-node` opening tag of `html`. */
+function injectSpecAttrs(html: string, attrs: string): string {
+  if (!attrs) return html
+  return html.replace('class="uiux-node"', `class="uiux-node"${attrs}`)
 }
 
 function box(node: NodeInstance, extra = ''): string {
@@ -89,6 +116,12 @@ function gridHtml(node: NodeInstance): string {
 }
 
 function renderNode(node: NodeInstance, components: CustomComponent[]): string {
+  const spec = node.props.spec as ElementSpec | undefined
+  const html = injectSpecAttrs(renderNodeBody(node, components), specAttrs(spec))
+  return specComment(spec) + html
+}
+
+function renderNodeBody(node: NodeInstance, components: CustomComponent[]): string {
   if (node.type.startsWith('custom:')) {
     const comp = components.find((c) => c.id === node.type.slice('custom:'.length))
     if (!comp) return `<div class="uiux-node" style="${box(node)}"></div>`

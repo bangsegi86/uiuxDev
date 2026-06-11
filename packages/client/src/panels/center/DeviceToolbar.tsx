@@ -1,6 +1,7 @@
 import { selectSurface, useEditor } from '../../state/editorStore'
 import { useI18n } from '../../i18n/I18nContext'
 import { downloadScreenHtml } from '../../lib/htmlExport'
+import { downloadScreenSpecSheet } from '../../lib/specSheet'
 
 export function DeviceToolbar() {
   const { t } = useI18n()
@@ -44,6 +45,7 @@ export function DeviceToolbar() {
       <span className="zoom-value">{Math.round(zoom * 100)}%</span>
       <span className="spacer" />
       <button onClick={() => downloadScreenHtml(screen, components)}>{t.exportHtml}</button>
+      <button onClick={() => downloadScreenSpecSheet(screen, components)}>{t.specSheet}</button>
       <button className="primary" onClick={() => void saveActive()} disabled={saving}>
         {saving ? '…' : t.save}
       </button>

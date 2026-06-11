@@ -3,6 +3,7 @@ import { selectRoot, useEditor } from '../../state/editorStore'
 import { findNode } from '../../state/tree'
 import { useI18n } from '../../i18n/I18nContext'
 import { GridEditor } from './GridEditor'
+import { SpecEditor } from './SpecEditor'
 
 export function PropertyPanel() {
   const { t } = useI18n()
@@ -157,6 +158,11 @@ export function PropertyPanel() {
       <div className="prop-group">
         <div className="prop-group-title">{t.content} / {t.style}</div>
         {def?.fields.map(renderField)}
+      </div>
+
+      <div className="prop-group">
+        <div className="prop-group-title">{t.devSpec}</div>
+        <SpecEditor node={node} updateProp={updateProp} checkpoint={checkpoint} />
       </div>
     </aside>
   )

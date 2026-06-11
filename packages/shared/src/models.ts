@@ -35,6 +35,39 @@ export interface NodeInstance {
   children: NodeInstance[]
 }
 
+/** Button/action behaviour referenced by a developer spec. */
+export type ButtonActionType = 'navigate' | 'submit' | 'openModal' | 'custom'
+
+/**
+ * Developer-facing specification attached to an element (stored in
+ * `NodeInstance.props.spec`). Lets designers document behaviour and constraints
+ * so developers can reference them in the property panel, the HTML export, and
+ * the generated spec sheet.
+ */
+export interface ElementSpec {
+  // common to every element
+  behavior?: string
+  devNote?: string
+  ticketRef?: string
+  // input / calendar
+  maxLength?: number
+  minLength?: number
+  pattern?: string
+  validationMessage?: string
+  // button
+  actionType?: ButtonActionType
+  actionTarget?: string
+  actionDescription?: string
+  // radio / checkbox / grid
+  dataSource?: string
+}
+
+/** True when a spec is missing or every field is blank. */
+export function isSpecEmpty(spec?: ElementSpec): boolean {
+  if (!spec) return true
+  return Object.values(spec).every((v) => v === undefined || v === null || v === '')
+}
+
 /** An application user (account). */
 export interface User {
   id: string
