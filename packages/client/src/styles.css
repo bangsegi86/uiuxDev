@@ -789,9 +789,38 @@ textarea {
 }
 .board-el-imgempty {
   flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border: none;
   background: #f1f5f9;
   color: #64748b;
+  cursor: pointer;
+  font-size: 12px;
+}
+.board-el-color {
+  width: 18px;
+  height: 14px;
+  border: none;
+  padding: 0;
+  background: none;
+  cursor: pointer;
+}
+.board-el-tool {
+  border: none;
+  background: transparent;
+  padding: 0 2px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.board-el-resize {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 14px;
+  height: 14px;
+  cursor: nwse-resize;
+  background: linear-gradient(135deg, transparent 50%, var(--border-strong) 50%);
 }
 
 /* ---- board context menu ---- */

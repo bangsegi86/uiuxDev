@@ -11,6 +11,7 @@ type Drag =
   | { mode: 'none' }
   | { mode: 'item'; screenId: string; offX: number; offY: number }
   | { mode: 'element'; id: string; offX: number; offY: number }
+  | { mode: 'elementResize'; id: string; startX: number; startY: number; startW: number; startH: number }
   | { mode: 'connect'; from: string; x: number; y: number }
 
 interface Ctx {
@@ -81,6 +82,11 @@ export function BoardView({ board }: { board: Board }) {
       moveBoardItem(board.id, drag.screenId, Math.round(p.x - drag.offX), Math.round(p.y - drag.offY))
     } else if (drag.mode === 'element') {
       updateBoardElement(board.id, drag.id, { x: Math.round(p.x - drag.offX), y: Math.round(p.y - drag.offY) })
+    } else if (drag.mode === 'elementResize') {
+      updateBoardElement(board.id, drag.id, {
+        w: Math.max(60, Math.round(drag.startW + (p.x - drag.startX))),
+        h: Math.max(40, Math.round(drag.startH + (p.y - drag.startY)))
+      })
     } else if (drag.mode === 'connect') {
       setDrag({ ...drag, x: p.x, y: p.y })
     }
@@ -91,6 +97,21 @@ export function BoardView({ board }: { board: Board }) {
     const p = toBoard(e.clientX, e.clientY)
     setDrag({ mode: 'element', id: el.id, offX: p.x - el.x, offY: p.y - el.y })
     ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+  }
+
+  const onElementResizeDown = (e: ReactPointerEvent, el: BoardElement) => {
+    e.stopPropagation()
+    const p = toBoard(e.clientX, e.clientY)
+    setDrag({ mode: 'elementResize', id: el.id, startX: p.x, startY: p.y, startW: el.w, startH: el.h })
+    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+  }
+
+  /** Read a picked image file as a data URL and store it on the element. */
+  const onPickImage = (id: string, file: File | undefined | null) => {
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => updateBoardElement(board.id, id, { src: String(reader.result) })
+    reader.readAsDataURL(file)
   }
 
   const onUp = (e: ReactPointerEvent) => {
@@ -228,21 +249,47 @@ export function BoardView({ board }: { board: Board }) {
             >
               <div className="board-el-head" onPointerDown={(e) => onElementHeadDown(e, el)}>
                 <span className="board-el-grip">⠿</span>
+                <span className="spacer" />
+                {el.kind === 'memo' && (
+                  <input
+                    className="board-el-color"
+                    type="color"
+                    title={t.memoColor}
+                    value={el.color ?? '#fff8c5'}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onChange={(e) => updateBoardElement(board.id, el.id, { color: e.target.value })}
+                  />
+                )}
+                {el.kind === 'image' && (
+                  <button
+                    className="board-el-tool"
+                    title={t.imageUrl}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={() => {
+                      const v = window.prompt(t.imageUrl, el.src ?? '')
+                      if (v !== null) updateBoardElement(board.id, el.id, { src: v })
+                    }}
+                  >
+                    🔗
+                  </button>
+                )}
                 <button className="board-frame-x" title={t.delete} onClick={() => removeBoardElement(board.id, el.id)}>
                   ×
                 </button>
               </div>
               {el.kind === 'image' ? (
                 el.src ? (
-                  <img className="board-el-img" src={el.src} alt="" onDoubleClick={() => {
-                    const v = window.prompt(t.imageUrl, el.src ?? '')
-                    if (v !== null) updateBoardElement(board.id, el.id, { src: v })
-                  }} />
+                  <img className="board-el-img" src={el.src} alt="" />
                 ) : (
-                  <button className="board-el-imgempty" onClick={() => {
-                    const v = window.prompt(t.imageUrl, '')
-                    if (v) updateBoardElement(board.id, el.id, { src: v })
-                  }}>🖼 {t.imageUrl}</button>
+                  <label className="board-el-imgempty">
+                    🖼 {t.uploadImage}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      hidden
+                      onChange={(e) => onPickImage(el.id, e.target.files?.[0])}
+                    />
+                  </label>
                 )
               ) : (
                 <textarea
@@ -252,6 +299,7 @@ export function BoardView({ board }: { board: Board }) {
                   onChange={(e) => updateBoardElement(board.id, el.id, { text: e.target.value })}
                 />
               )}
+              <div className="board-el-resize" onPointerDown={(e) => onElementResizeDown(e, el)} />
             </div>
           ))}
 
