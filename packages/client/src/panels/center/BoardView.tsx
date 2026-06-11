@@ -1,5 +1,5 @@
 import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
-import type { Board, BoardItem, Screen } from '@uiux/shared'
+import type { Board, BoardElement, BoardItem, Screen } from '@uiux/shared'
 import { useEditor } from '../../state/editorStore'
 import { useI18n } from '../../i18n/I18nContext'
 import { renderStaticTree } from '../../componentRegistry'
@@ -10,6 +10,7 @@ const SCALE = 0.26
 type Drag =
   | { mode: 'none' }
   | { mode: 'item'; screenId: string; offX: number; offY: number }
+  | { mode: 'element'; id: string; offX: number; offY: number }
   | { mode: 'connect'; from: string; x: number; y: number }
 
 interface Ctx {
@@ -34,6 +35,8 @@ export function BoardView({ board }: { board: Board }) {
   const addConnector = useEditor((s) => s.addConnector)
   const deleteConnector = useEditor((s) => s.deleteConnector)
   const removeScreenFromBoard = useEditor((s) => s.removeScreenFromBoard)
+  const updateBoardElement = useEditor((s) => s.updateBoardElement)
+  const removeBoardElement = useEditor((s) => s.removeBoardElement)
   const openScreen = useEditor((s) => s.openScreen)
   const saveActive = useEditor((s) => s.saveActive)
   const renameDoc = useEditor((s) => s.renameDoc)
@@ -76,9 +79,18 @@ export function BoardView({ board }: { board: Board }) {
     const p = toBoard(e.clientX, e.clientY)
     if (drag.mode === 'item') {
       moveBoardItem(board.id, drag.screenId, Math.round(p.x - drag.offX), Math.round(p.y - drag.offY))
+    } else if (drag.mode === 'element') {
+      updateBoardElement(board.id, drag.id, { x: Math.round(p.x - drag.offX), y: Math.round(p.y - drag.offY) })
     } else if (drag.mode === 'connect') {
       setDrag({ ...drag, x: p.x, y: p.y })
     }
+  }
+
+  const onElementHeadDown = (e: ReactPointerEvent, el: BoardElement) => {
+    e.stopPropagation()
+    const p = toBoard(e.clientX, e.clientY)
+    setDrag({ mode: 'element', id: el.id, offX: p.x - el.x, offY: p.y - el.y })
+    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
   }
 
   const onUp = (e: ReactPointerEvent) => {
@@ -207,6 +219,41 @@ export function BoardView({ board }: { board: Board }) {
               </div>
             )
           })}
+
+          {(board.elements ?? []).map((el) => (
+            <div
+              key={el.id}
+              className={`board-el board-el-${el.kind}`}
+              style={{ left: el.x, top: el.y, width: el.w, height: el.h, background: el.kind === 'memo' ? el.color : undefined }}
+            >
+              <div className="board-el-head" onPointerDown={(e) => onElementHeadDown(e, el)}>
+                <span className="board-el-grip">⠿</span>
+                <button className="board-frame-x" title={t.delete} onClick={() => removeBoardElement(board.id, el.id)}>
+                  ×
+                </button>
+              </div>
+              {el.kind === 'image' ? (
+                el.src ? (
+                  <img className="board-el-img" src={el.src} alt="" onDoubleClick={() => {
+                    const v = window.prompt(t.imageUrl, el.src ?? '')
+                    if (v !== null) updateBoardElement(board.id, el.id, { src: v })
+                  }} />
+                ) : (
+                  <button className="board-el-imgempty" onClick={() => {
+                    const v = window.prompt(t.imageUrl, '')
+                    if (v) updateBoardElement(board.id, el.id, { src: v })
+                  }}>🖼 {t.imageUrl}</button>
+                )
+              ) : (
+                <textarea
+                  className="board-el-text"
+                  value={el.text ?? ''}
+                  placeholder={t.editText}
+                  onChange={(e) => updateBoardElement(board.id, el.id, { text: e.target.value })}
+                />
+              )}
+            </div>
+          ))}
 
           {ctx && (
             <div className="board-context" style={{ left: ctx.x, top: ctx.y }} onPointerDown={(e) => e.stopPropagation()}>

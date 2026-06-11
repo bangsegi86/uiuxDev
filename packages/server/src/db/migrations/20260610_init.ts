@@ -41,6 +41,7 @@ export async function up(knex: Knex): Promise<void> {
     t.string('name', 200).notNullable()
     t.text('items').notNullable()
     t.text('connectors').nullable()
+    t.text('elements').nullable()
     t.text('notes').nullable()
     t.string('createdAt', 40).notNullable()
     t.string('updatedAt', 40).notNullable()

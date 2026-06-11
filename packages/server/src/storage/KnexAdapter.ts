@@ -177,6 +177,7 @@ export class KnexAdapter implements StorageAdapter {
     if (patch.name !== undefined) row.name = next.name
     if (patch.items !== undefined) row.items = JSON.stringify(next.items)
     if (patch.connectors !== undefined) row.connectors = JSON.stringify(next.connectors)
+    if (patch.elements !== undefined) row.elements = JSON.stringify(next.elements)
     if (patch.notes !== undefined) row.notes = next.notes
     row.updatedAt = next.updatedAt
     await this.db('boards').where({ id }).update(row)
@@ -192,6 +193,7 @@ export class KnexAdapter implements StorageAdapter {
       name: b.name,
       items: JSON.stringify(b.items),
       connectors: JSON.stringify(b.connectors),
+      elements: JSON.stringify(b.elements),
       notes: b.notes,
       createdAt: b.createdAt,
       updatedAt: b.updatedAt
@@ -203,6 +205,7 @@ export class KnexAdapter implements StorageAdapter {
       name: row.name as string,
       items: this.parse(row.items ?? '[]'),
       connectors: this.parse(row.connectors ?? '[]'),
+      elements: this.parse(row.elements ?? '[]'),
       notes: (row.notes as string) ?? '',
       createdAt: row.createdAt as string,
       updatedAt: row.updatedAt as string

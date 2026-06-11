@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { Project, TreeNode } from '@uiux/shared'
 import { useEditor } from '../../state/editorStore'
 import { useI18n } from '../../i18n/I18nContext'
+import { NewScreenModal } from './NewScreenModal'
 
 export function ProjectExplorer() {
   const { t } = useI18n()
@@ -19,6 +20,7 @@ export function ProjectExplorer() {
   const openBoard = useEditor((s) => s.openBoard)
 
   const [projects, setProjects] = useState<Project[]>([])
+  const [newScreenParent, setNewScreenParent] = useState<{ id: string | null } | null>(null)
 
   const refreshProjects = async () => setProjects(await loadProjects())
   useEffect(() => {
@@ -39,12 +41,7 @@ export function ProjectExplorer() {
     await createNode('folder', name.trim(), parentId)
   }
 
-  const onNewScreen = async (parentId: string | null) => {
-    const name = window.prompt(t.promptScreenName)
-    if (!name) return
-    const device = window.confirm('PC = OK / Mobile = Cancel') ? 'pc' : 'mobile'
-    await createNode('screen', name.trim(), parentId, device)
-  }
+  const onNewScreen = (parentId: string | null) => setNewScreenParent({ id: parentId })
 
   const onNewBoard = async (parentId: string | null) => {
     const name = window.prompt(t.promptBoardName)
@@ -137,6 +134,10 @@ export function ProjectExplorer() {
         </>
       ) : (
         <div className="empty-hint">{t.newProject} ＋</div>
+      )}
+
+      {newScreenParent && (
+        <NewScreenModal parentId={newScreenParent.id} onClose={() => setNewScreenParent(null)} />
       )}
     </div>
   )

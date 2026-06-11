@@ -96,7 +96,7 @@ export function App() {
           )}
         </main>
 
-        <PropertyPanel />
+        {isScreenTab && <PropertyPanel />}
       </div>
 
       {componentDraft && <ComponentEditor />}

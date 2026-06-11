@@ -130,15 +130,30 @@ export interface Connector {
   label?: string
 }
 
+/** A free-floating, board-only element (sticky memo, label, image). */
+export type BoardElementKind = 'memo' | 'text' | 'image'
+export interface BoardElement {
+  id: string
+  kind: BoardElementKind
+  x: number
+  y: number
+  w: number
+  h: number
+  text?: string
+  src?: string
+  color?: string
+}
+
 /**
  * A flow board (its own file): references existing screens by id, positions
- * them, and draws connectors to express the navigation/flow between them.
+ * them, draws connectors, and can carry board-only elements (memos/images).
  */
 export interface Board {
   id: string
   name: string
   items: BoardItem[]
   connectors: Connector[]
+  elements: BoardElement[]
   notes: string
   createdAt: string
   updatedAt: string

@@ -163,6 +163,7 @@ export async function registerRoutes(app: FastifyInstance, storage: StorageAdapt
           name: body.name,
           items: [],
           connectors: [],
+          elements: [],
           notes: '',
           createdAt: ts,
           updatedAt: ts

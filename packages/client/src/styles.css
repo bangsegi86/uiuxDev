@@ -729,6 +729,71 @@ textarea {
   pointer-events: none;
 }
 
+/* ---- screen size inputs ---- */
+.size-input {
+  width: 64px;
+}
+.size-x {
+  color: var(--muted);
+}
+
+/* ---- board elements ---- */
+.board-hint {
+  font-size: 12px;
+  color: var(--muted);
+  padding: 4px 2px 10px;
+  line-height: 1.5;
+}
+.board-el {
+  position: absolute;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.board-el-memo {
+  border-color: #e3c000;
+}
+.board-el-text {
+  flex: 1;
+  border: none;
+  resize: none;
+  padding: 6px 8px;
+  background: transparent;
+  font: inherit;
+  outline: none;
+}
+.board-el-memo .board-el-text {
+  font-size: 13px;
+}
+.board-el-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 18px;
+  background: rgba(0, 0, 0, 0.06);
+  cursor: move;
+  padding: 0 4px;
+}
+.board-el-grip {
+  color: var(--muted);
+  font-size: 11px;
+}
+.board-el-img {
+  flex: 1;
+  width: 100%;
+  object-fit: contain;
+  background: #f1f5f9;
+}
+.board-el-imgempty {
+  flex: 1;
+  border: none;
+  background: #f1f5f9;
+  color: #64748b;
+}
+
 /* ---- board context menu ---- */
 .board-context {
   position: absolute;
@@ -773,6 +838,12 @@ textarea {
 }
 .add-screen-modal {
   width: 640px;
+  max-width: 92vw;
+  padding: 16px;
+  gap: 12px;
+}
+.new-screen-modal {
+  width: 380px;
   max-width: 92vw;
   padding: 16px;
   gap: 12px;

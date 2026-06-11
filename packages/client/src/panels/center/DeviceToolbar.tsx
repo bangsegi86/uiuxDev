@@ -11,6 +11,8 @@ export function DeviceToolbar() {
   const surface = useEditor(useShallow(selectSurface))
   const components = useEditor((s) => s.components)
   const setDevice = useEditor((s) => s.setDevice)
+  const setCanvasSize = useEditor((s) => s.setCanvasSize)
+  const checkpoint = useEditor((s) => s.checkpoint)
   const zoom = useEditor((s) => s.zoom)
   const setZoom = useEditor((s) => s.setZoom)
   const saving = useEditor((s) => s.saving)
@@ -40,6 +42,25 @@ export function DeviceToolbar() {
           {t.mobile}
         </button>
       </div>
+      <span className="divider-v" />
+      <span className="label">{t.size}</span>
+      <input
+        className="size-input"
+        type="number"
+        title={t.width}
+        value={screen.canvas.width}
+        onFocus={checkpoint}
+        onChange={(e) => setCanvasSize(Number(e.target.value), screen.canvas.height)}
+      />
+      <span className="size-x">×</span>
+      <input
+        className="size-input"
+        type="number"
+        title={t.height}
+        value={screen.canvas.height}
+        onFocus={checkpoint}
+        onChange={(e) => setCanvasSize(screen.canvas.width, Number(e.target.value))}
+      />
       <span className="divider-v" />
       <span className="label">{t.zoom}</span>
       <input type="range" min={0.25} max={1.5} step={0.05} value={zoom} onChange={(e) => setZoom(Number(e.target.value))} />

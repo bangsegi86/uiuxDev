@@ -57,6 +57,18 @@ export const boardItemSchema = z.object({
   y: z.number()
 })
 
+export const boardElementSchema = z.object({
+  id: z.string(),
+  kind: z.enum(['memo', 'text', 'image']),
+  x: z.number(),
+  y: z.number(),
+  w: z.number(),
+  h: z.number(),
+  text: z.string().optional(),
+  src: z.string().optional(),
+  color: z.string().optional()
+})
+
 /** Save a single screen design. */
 export const screenSaveSchema = z.object({
   name: z.string().min(1).max(200).optional(),
@@ -71,7 +83,8 @@ export const boardSaveSchema = z.object({
   name: z.string().min(1).max(200).optional(),
   notes: z.string().optional(),
   items: z.array(boardItemSchema).optional(),
-  connectors: z.array(connectorSchema).optional()
+  connectors: z.array(connectorSchema).optional(),
+  elements: z.array(boardElementSchema).optional()
 })
 
 export const customComponentSaveSchema = z.object({

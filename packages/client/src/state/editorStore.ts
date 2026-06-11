@@ -4,6 +4,8 @@ import {
   createInstance,
   DEVICE_FRAMES,
   type Board,
+  type BoardElement,
+  type BoardElementKind,
   type BoardItem,
   type Connector,
   type CustomComponent,
@@ -82,7 +84,13 @@ interface EditorState {
   openProject: (id: string) => Promise<void>
   createProject: (name: string) => Promise<Project>
   refreshTree: () => Promise<void>
-  createNode: (type: 'folder' | 'screen' | 'board', name: string, parentId: string | null, device?: DeviceKind) => Promise<void>
+  createNode: (
+    type: 'folder' | 'screen' | 'board',
+    name: string,
+    parentId: string | null,
+    device?: DeviceKind,
+    size?: { width: number; height: number }
+  ) => Promise<void>
   renameNode: (nodeId: string, name: string) => Promise<void>
   renameDoc: (tab: Tab, name: string) => Promise<void>
   deleteNode: (nodeId: string) => Promise<void>
@@ -100,6 +108,9 @@ interface EditorState {
   addConnector: (boardId: string, from: string, to: string) => void
   updateConnector: (boardId: string, id: string, patch: Partial<Connector>) => void
   deleteConnector: (boardId: string, id: string) => void
+  addBoardElement: (boardId: string, kind: BoardElementKind) => void
+  updateBoardElement: (boardId: string, id: string, patch: Partial<BoardElement>) => void
+  removeBoardElement: (boardId: string, id: string) => void
 
   // --- component editor ---
   newComponent: () => void
@@ -134,6 +145,7 @@ interface EditorState {
 
   // --- device / notes / zoom ---
   setDevice: (device: DeviceKind) => void
+  setCanvasSize: (width: number, height: number) => void
   setZoom: (zoom: number) => void
   setNotes: (notes: string) => void
   toggleNotes: () => void
@@ -264,12 +276,18 @@ export const useEditor = create<EditorState>((set, get) => ({
     set({ tree: await api.listTree(projectId) })
   },
 
-  createNode: async (type, name, parentId, device) => {
+  createNode: async (type, name, parentId, device, size) => {
     const { projectId } = get()
     if (!projectId) return
     const node = await api.createTreeNode(projectId, { type, name, parentId, device })
     await get().refreshTree()
-    if (type === 'screen' && node.screenId) await get().openScreen(node.screenId)
+    if (type === 'screen' && node.screenId) {
+      await get().openScreen(node.screenId)
+      if (size) {
+        get().setCanvasSize(size.width, size.height)
+        await get().saveActive()
+      }
+    }
     if (type === 'board' && node.boardId) await get().openBoard(node.boardId)
   },
 
@@ -329,7 +347,9 @@ export const useEditor = create<EditorState>((set, get) => ({
     if (!projectId) return
     let board = boards[boardId]
     if (!board) {
-      board = await api.getBoard(projectId, boardId)
+      const loaded = await api.getBoard(projectId, boardId)
+      // normalize older boards that predate `elements`
+      board = { ...loaded, items: loaded.items ?? [], connectors: loaded.connectors ?? [], elements: loaded.elements ?? [] }
       set((s) => ({ boards: { ...s.boards, [boardId]: board } }))
     }
     // preload referenced screens so the board can render previews
@@ -465,6 +485,50 @@ export const useEditor = create<EditorState>((set, get) => ({
       if (!board) return {}
       return {
         boards: { ...s.boards, [boardId]: { ...board, connectors: board.connectors.filter((c) => c.id !== id) } },
+        dirty: { ...s.dirty, [boardId]: true }
+      }
+    })
+  },
+
+  addBoardElement: (boardId, kind) => {
+    set((s) => {
+      const board = s.boards[boardId]
+      if (!board) return {}
+      const n = (board.elements ?? []).length
+      const base = { id: nanoid(8), kind, x: 80 + n * 24, y: 80 + n * 24 }
+      const el: BoardElement =
+        kind === 'memo'
+          ? { ...base, w: 180, h: 120, text: '메모', color: '#fff8c5' }
+          : kind === 'image'
+            ? { ...base, w: 200, h: 140, src: '' }
+            : { ...base, w: 200, h: 40, text: '텍스트' }
+      return {
+        boards: { ...s.boards, [boardId]: { ...board, elements: [...(board.elements ?? []), el] } },
+        dirty: { ...s.dirty, [boardId]: true }
+      }
+    })
+  },
+
+  updateBoardElement: (boardId, id, patch) => {
+    set((s) => {
+      const board = s.boards[boardId]
+      if (!board) return {}
+      return {
+        boards: {
+          ...s.boards,
+          [boardId]: { ...board, elements: (board.elements ?? []).map((e) => (e.id === id ? { ...e, ...patch } : e)) }
+        },
+        dirty: { ...s.dirty, [boardId]: true }
+      }
+    })
+  },
+
+  removeBoardElement: (boardId, id) => {
+    set((s) => {
+      const board = s.boards[boardId]
+      if (!board) return {}
+      return {
+        boards: { ...s.boards, [boardId]: { ...board, elements: (board.elements ?? []).filter((e) => e.id !== id) } },
         dirty: { ...s.dirty, [boardId]: true }
       }
     })
@@ -766,6 +830,21 @@ export const useEditor = create<EditorState>((set, get) => ({
     set({ screens: { ...s.screens, [sc.id]: next }, dirty: { ...s.dirty, [sc.id]: true } })
   },
 
+  setCanvasSize: (width, height) => {
+    const s = get()
+    const sc = activeScreen(s)
+    if (!sc) return
+    const w = Math.max(64, Math.round(width))
+    const h = Math.max(64, Math.round(height))
+    get().checkpoint()
+    const next: Screen = {
+      ...sc,
+      canvas: { width: w, height: h },
+      root: { ...sc.root, layout: { ...sc.root.layout, w, h } }
+    }
+    set({ screens: { ...s.screens, [sc.id]: next }, dirty: { ...s.dirty, [sc.id]: true } })
+  },
+
   setZoom: (zoom) => set({ zoom }),
 
   setNotes: (notes) => {
@@ -834,7 +913,8 @@ export const useEditor = create<EditorState>((set, get) => ({
             name: board.name,
             notes: board.notes,
             items: board.items,
-            connectors: board.connectors
+            connectors: board.connectors,
+            elements: board.elements ?? []
           })
         }
       }
