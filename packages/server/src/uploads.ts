@@ -49,8 +49,11 @@ export async function readUpload(
   file: string
 ): Promise<{ buf: Buffer; mime: string } | null> {
   if (!/^[A-Za-z0-9_-]+\.[A-Za-z0-9]+$/.test(file) || !/^[A-Za-z0-9_-]+$/.test(projectId)) return null
+  // Defense in depth: ensure the resolved path stays inside the upload root.
+  const full = path.resolve(uploadRoot, projectId, file)
+  if (full !== path.join(path.resolve(uploadRoot), projectId, file)) return null
   try {
-    const buf = await fs.readFile(path.join(uploadRoot, projectId, file))
+    const buf = await fs.readFile(full)
     const ext = file.split('.').pop()!.toLowerCase()
     return { buf, mime: EXT_TO_MIME[ext] ?? 'application/octet-stream' }
   } catch {

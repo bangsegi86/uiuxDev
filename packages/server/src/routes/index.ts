@@ -20,6 +20,7 @@ import {
   type TreeNode
 } from '@uiux/shared'
 import { hashPassword, signToken, userFromAuthHeader, verifyPassword } from '../auth.js'
+import { boardInProject, screenInProject } from '../access.js'
 import { readUpload, saveDataUrl } from '../uploads.js'
 import type { StorageAdapter } from '../storage/index.js'
 
@@ -203,6 +204,9 @@ export async function registerRoutes(app: FastifyInstance, storage: StorageAdapt
   app.get<{ Params: { projectId: string; screenId: string } }>(
     '/api/projects/:projectId/screens/:screenId',
     async (req, reply) => {
+      if (!(await screenInProject(storage, req.params.projectId, req.params.screenId))) {
+        return reply.code(404).send({ error: 'screen not found' })
+      }
       const screen = await storage.getScreen(req.params.screenId)
       if (!screen) return reply.code(404).send({ error: 'screen not found' })
       return screen
@@ -212,6 +216,9 @@ export async function registerRoutes(app: FastifyInstance, storage: StorageAdapt
   app.put<{ Params: { projectId: string; screenId: string } }>(
     '/api/projects/:projectId/screens/:screenId',
     async (req, reply) => {
+      if (!(await screenInProject(storage, req.params.projectId, req.params.screenId))) {
+        return reply.code(404).send({ error: 'screen not found' })
+      }
       const body = screenSaveSchema.parse(req.body)
       const updated = await storage.updateScreen(req.params.screenId, {
         ...(body as Partial<Screen>),
@@ -226,6 +233,9 @@ export async function registerRoutes(app: FastifyInstance, storage: StorageAdapt
   app.get<{ Params: { projectId: string; boardId: string } }>(
     '/api/projects/:projectId/boards/:boardId',
     async (req, reply) => {
+      if (!(await boardInProject(storage, req.params.projectId, req.params.boardId))) {
+        return reply.code(404).send({ error: 'board not found' })
+      }
       const board = await storage.getBoard(req.params.boardId)
       if (!board) return reply.code(404).send({ error: 'board not found' })
       return board
@@ -235,6 +245,9 @@ export async function registerRoutes(app: FastifyInstance, storage: StorageAdapt
   app.put<{ Params: { projectId: string; boardId: string } }>(
     '/api/projects/:projectId/boards/:boardId',
     async (req, reply) => {
+      if (!(await boardInProject(storage, req.params.projectId, req.params.boardId))) {
+        return reply.code(404).send({ error: 'board not found' })
+      }
       const body = boardSaveSchema.parse(req.body)
       const updated = await storage.updateBoard(req.params.boardId, {
         ...(body as Partial<Board>),

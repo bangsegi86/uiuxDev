@@ -2,12 +2,17 @@ import type { FastifyInstance } from 'fastify'
 import type { WebSocket } from 'ws'
 import { routes } from '@uiux/shared'
 import { verifyToken } from './auth.js'
+import { userOwnsScreen } from './access.js'
+import type { StorageAdapter } from './storage/index.js'
 
 /**
  * Realtime collaboration: clients editing the same screen join a room keyed by
  * screenId. Screen-tree updates are broadcast to the other members (last write
  * wins); presence is broadcast on join/leave. Pragmatic, not a CRDT.
  */
+
+/** Reject collaboration messages larger than this (DoS guard). */
+const MAX_WS_MESSAGE = 4 * 1024 * 1024
 
 interface Member {
   socket: WebSocket
@@ -33,14 +38,21 @@ function safeSend(socket: WebSocket, data: string) {
   }
 }
 
-export async function registerCollab(app: FastifyInstance) {
-  app.get(routes.ws, { websocket: true }, (socket: WebSocket, req) => {
+export async function registerCollab(app: FastifyInstance, storage: StorageAdapter) {
+  app.get(routes.ws, { websocket: true }, async (socket: WebSocket, req) => {
     const query = req.query as { token?: string; screenId?: string }
     const payload = query.token ? verifyToken(query.token) : null
     const screenId = query.screenId
 
     if (!payload || !screenId) {
       safeSend(socket, JSON.stringify({ type: 'error', error: 'unauthorized' }))
+      socket.close()
+      return
+    }
+
+    // Only let the user join rooms for screens in a project they own (IDOR).
+    if (!(await userOwnsScreen(storage, payload.sub, screenId))) {
+      safeSend(socket, JSON.stringify({ type: 'error', error: 'forbidden' }))
       socket.close()
       return
     }
@@ -55,6 +67,10 @@ export async function registerCollab(app: FastifyInstance) {
     broadcastPresence(screenId)
 
     socket.on('message', (raw: Buffer) => {
+      if (raw.length > MAX_WS_MESSAGE) {
+        socket.close(1009, 'message too large')
+        return
+      }
       let parsed: { type?: string; root?: unknown; x?: number; y?: number }
       try {
         parsed = JSON.parse(raw.toString())

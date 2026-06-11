@@ -80,7 +80,11 @@ export class LocalFileAdapter implements StorageAdapter {
   }
   private async writeJson(file: string, value: unknown): Promise<void> {
     await fs.mkdir(path.dirname(file), { recursive: true })
-    await fs.writeFile(file, JSON.stringify(value, null, 2), 'utf8')
+    // Write to a temp file then rename so a crash mid-write can't corrupt the
+    // existing JSON (rename is atomic on the same filesystem).
+    const tmp = `${file}.${process.pid}.${Date.now()}.tmp`
+    await fs.writeFile(tmp, JSON.stringify(value, null, 2), 'utf8')
+    await fs.rename(tmp, file)
   }
   private async ensureFile(file: string, fallback: unknown): Promise<void> {
     try {

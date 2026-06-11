@@ -164,6 +164,22 @@ async function run() {
   assert.equal(reload.body.tree.length, 4)
   console.log('✓ reload project tree')
 
+  // IDOR: a second user must not reach the first user's screen by id,
+  // even when addressing it through their own project.
+  const reg2 = await call('POST', '/api/auth/register', {
+    email: `v${Date.now()}@test.dev`,
+    password: 'secret123'
+  })
+  const token1 = token
+  token = reg2.body.token
+  const proj2 = await call('POST', '/api/projects', { name: 'Intruder' })
+  const idor = await call('GET', `/api/projects/${proj2.body.id}/screens/${screen2Id}`)
+  assert.equal(idor.status, 404)
+  const idorProj = await call('GET', `/api/projects/${projectId}`)
+  assert.equal(idorProj.status, 403)
+  token = token1
+  console.log('✓ cross-user access blocked (IDOR + ownership)')
+
   // delete folder cascades to its screen child (screen2 + board remain)
   const del = await call('DELETE', `/api/projects/${projectId}/tree/${folder.body.id}`)
   assert.equal(del.status, 204)

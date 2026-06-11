@@ -14,6 +14,9 @@ export type { StorageAdapter }
  */
 export async function createStorage(): Promise<StorageAdapter> {
   const driver = (process.env.STORAGE_DRIVER ?? 'local').toLowerCase()
+  if (!['local', 'postgres', 'oracle'].includes(driver)) {
+    throw new Error(`Invalid STORAGE_DRIVER "${driver}" (expected: local | postgres | oracle)`)
+  }
 
   if (driver === 'postgres' || driver === 'oracle') {
     const db = knexLib(knexConfigFor(driver))

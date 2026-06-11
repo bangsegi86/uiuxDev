@@ -5,7 +5,22 @@ import { createHmac, randomBytes, scryptSync, timingSafeEqual } from 'node:crypt
  * scrypt password hashing and HS256-style HMAC JWTs.
  */
 
-const SECRET = process.env.AUTH_SECRET ?? 'dev-insecure-secret-change-me'
+/**
+ * Resolve the token-signing secret. In production AUTH_SECRET is mandatory so a
+ * deployment can never silently ship with a publicly-known signing key (which
+ * would let anyone forge tokens). In development a fixed fallback is used.
+ */
+function resolveSecret(): string {
+  const fromEnv = process.env.AUTH_SECRET
+  if (fromEnv && fromEnv.length >= 16) return fromEnv
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('AUTH_SECRET environment variable (>=16 chars) is required in production')
+  }
+  if (fromEnv) return fromEnv
+  return 'dev-insecure-secret-change-me'
+}
+
+const SECRET = resolveSecret()
 const TOKEN_TTL_SECONDS = 60 * 60 * 24 * 7 // 7 days
 
 export function hashPassword(password: string): string {
