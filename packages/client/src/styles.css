@@ -68,6 +68,18 @@ textarea {
   color: var(--text);
   background: #fff;
 }
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+/* Keyboard-only focus ring for accessibility. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
 
 /* ---- layout ---- */
 .app {
@@ -145,6 +157,31 @@ textarea {
 }
 .center-empty {
   margin: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  max-width: 380px;
+}
+.empty-illustration {
+  font-size: 46px;
+  color: var(--border-strong);
+  line-height: 1;
+}
+.empty-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+}
+.empty-sub {
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+.empty-cta {
+  margin-top: 8px;
+  padding: 8px 16px;
+  font-size: 13px;
 }
 
 .user-box {
@@ -1007,6 +1044,28 @@ textarea {
   text-align: left;
   padding: 4px 0;
   color: var(--accent);
+}
+
+/* ---- prompt/confirm dialog ---- */
+.dialog-overlay {
+  z-index: 3000;
+}
+.dialog-box {
+  width: 360px;
+  max-width: 92vw;
+  padding: 18px;
+  gap: 14px;
+}
+.dialog-title {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+.dialog-input {
+  width: 100%;
+  padding: 8px 10px;
+  font-size: 13px;
 }
 
 /* ---- autosave toggle ---- */

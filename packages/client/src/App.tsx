@@ -6,10 +6,12 @@ import { useCollaboration } from './hooks/useCollaboration'
 import { useAutosave } from './hooks/useAutosave'
 import { useI18n } from './i18n/I18nContext'
 import { AuthScreen } from './panels/AuthScreen'
+import { DialogHost } from './panels/DialogHost'
 import { ComponentEditor } from './panels/ComponentEditor'
 import { LeftPanel } from './panels/left/LeftPanel'
 import { PropertyPanel } from './panels/right/PropertyPanel'
 import { TabBar } from './panels/center/TabBar'
+import { CenterEmpty } from './panels/center/CenterEmpty'
 import { BoardView } from './panels/center/BoardView'
 import { DeviceToolbar } from './panels/center/DeviceToolbar'
 import { AlignToolbar } from './panels/center/AlignToolbar'
@@ -104,7 +106,7 @@ export function App() {
         <main className="center-panel">
           <TabBar />
           {!activeTab ? (
-            <div className="center-empty">{t.selectScreen}</div>
+            <CenterEmpty />
           ) : activeBoard ? (
             <BoardView board={activeBoard} />
           ) : isScreenTab ? (
@@ -117,7 +119,7 @@ export function App() {
               <NotesPanel />
             </>
           ) : (
-            <div className="center-empty">{t.selectScreen}</div>
+            <CenterEmpty />
           )}
         </main>
 
@@ -125,6 +127,7 @@ export function App() {
       </div>
 
       {componentDraft && <ComponentEditor />}
+      <DialogHost />
     </div>
   )
 }

@@ -1,4 +1,5 @@
 import { useEditor, type Tab } from '../../state/editorStore'
+import { dialog } from '../../state/dialogStore'
 import { useI18n } from '../../i18n/I18nContext'
 
 /** IDE-style tab bar for the open screens and boards. */
@@ -13,8 +14,8 @@ export function TabBar() {
   const closeTab = useEditor((s) => s.closeTab)
   const renameDoc = useEditor((s) => s.renameDoc)
 
-  const onRename = (tab: Tab, current: string) => {
-    const name = window.prompt(t.rename, current)
+  const onRename = async (tab: Tab, current: string) => {
+    const name = await dialog.prompt(t.rename, current)
     if (name && name.trim()) void renameDoc(tab, name)
   }
 

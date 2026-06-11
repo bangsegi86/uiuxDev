@@ -1,5 +1,6 @@
 import { useShallow } from 'zustand/react/shallow'
 import { selectSurface, useEditor } from '../../state/editorStore'
+import { dialog } from '../../state/dialogStore'
 import { useI18n } from '../../i18n/I18nContext'
 import { downloadScreenHtml } from '../../lib/htmlExport'
 import { downloadScreenSpecSheet } from '../../lib/specSheet'
@@ -24,8 +25,8 @@ export function DeviceToolbar() {
 
   if (!screen || !surface) return null
 
-  const onRename = () => {
-    const name = window.prompt(t.rename, screen.name)
+  const onRename = async () => {
+    const name = await dialog.prompt(t.rename, screen.name)
     if (name && name.trim() && activeTab) void renameDoc(activeTab, name)
   }
 

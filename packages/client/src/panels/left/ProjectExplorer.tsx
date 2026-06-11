@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { Project, TreeNode } from '@uiux/shared'
 import { useEditor } from '../../state/editorStore'
+import { dialog } from '../../state/dialogStore'
 import { useI18n } from '../../i18n/I18nContext'
 import { NewScreenModal } from './NewScreenModal'
 
@@ -29,14 +30,14 @@ export function ProjectExplorer() {
   }, [])
 
   const onNewProject = async () => {
-    const name = window.prompt(t.promptProjectName)
+    const name = await dialog.prompt(t.promptProjectName)
     if (!name) return
     await createProject(name.trim())
     await refreshProjects()
   }
 
   const onNewFolder = async (parentId: string | null) => {
-    const name = window.prompt(t.promptFolderName)
+    const name = await dialog.prompt(t.promptFolderName)
     if (!name) return
     await createNode('folder', name.trim(), parentId)
   }
@@ -44,7 +45,7 @@ export function ProjectExplorer() {
   const onNewScreen = (parentId: string | null) => setNewScreenParent({ id: parentId })
 
   const onNewBoard = async (parentId: string | null) => {
-    const name = window.prompt(t.promptBoardName)
+    const name = await dialog.prompt(t.promptBoardName)
     if (!name) return
     await createNode('board', name.trim(), parentId)
   }
@@ -61,13 +62,13 @@ export function ProjectExplorer() {
   const iconOf = (node: TreeNode) => (node.type === 'folder' ? '📁' : node.type === 'board' ? '🗺' : '📄')
 
   const onRename = async (node: TreeNode) => {
-    const name = window.prompt(t.rename, node.name)
+    const name = await dialog.prompt(t.rename, node.name)
     if (!name) return
     await renameNode(node.id, name.trim())
   }
 
   const onDelete = async (node: TreeNode) => {
-    if (!window.confirm(t.confirmDelete)) return
+    if (!(await dialog.confirm(t.confirmDelete))) return
     await deleteNode(node.id)
   }
 

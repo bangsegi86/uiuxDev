@@ -1,6 +1,7 @@
 import { memo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import type { Board, BoardElement, BoardItem, Screen } from '@uiux/shared'
 import { useEditor } from '../../state/editorStore'
+import { dialog } from '../../state/dialogStore'
 import { useI18n } from '../../i18n/I18nContext'
 import { renderStaticTree } from '../../componentRegistry'
 import { AddScreenModal } from './AddScreenModal'
@@ -67,8 +68,8 @@ export function BoardView({ board }: { board: Board }) {
   const [ctx, setCtx] = useState<Ctx | null>(null)
   const [addOpen, setAddOpen] = useState(false)
 
-  const onRenameBoard = () => {
-    const name = window.prompt(t.rename, board.name)
+  const onRenameBoard = async () => {
+    const name = await dialog.prompt(t.rename, board.name)
     if (name && name.trim()) void renameDoc({ kind: 'board', id: board.id }, name)
   }
 
@@ -145,8 +146,8 @@ export function BoardView({ board }: { board: Board }) {
     reader.readAsDataURL(file)
   }
 
-  const editConnectorLabel = (id: string, current: string) => {
-    const v = window.prompt(t.connectorLabel, current)
+  const editConnectorLabel = async (id: string, current: string) => {
+    const v = await dialog.prompt(t.connectorLabel, current)
     if (v !== null) updateConnector(board.id, id, { label: v })
   }
 
@@ -206,9 +207,9 @@ export function BoardView({ board }: { board: Board }) {
                   key={c.id}
                   className="board-connector"
                   onDoubleClick={() => editConnectorLabel(c.id, c.label ?? '')}
-                  onContextMenu={(e) => {
+                  onContextMenu={async (e) => {
                     e.preventDefault()
-                    if (window.confirm(t.confirmDelete)) deleteConnector(board.id, c.id)
+                    if (await dialog.confirm(t.confirmDelete)) deleteConnector(board.id, c.id)
                   }}
                 >
                   <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="transparent" strokeWidth={12}>
@@ -333,8 +334,8 @@ export function BoardView({ board }: { board: Board }) {
                     className="board-el-tool"
                     title={t.imageUrl}
                     onPointerDown={(e) => e.stopPropagation()}
-                    onClick={() => {
-                      const v = window.prompt(t.imageUrl, el.src ?? '')
+                    onClick={async () => {
+                      const v = await dialog.prompt(t.imageUrl, el.src ?? '')
                       if (v !== null) updateBoardElement(board.id, el.id, { src: v })
                     }}
                   >

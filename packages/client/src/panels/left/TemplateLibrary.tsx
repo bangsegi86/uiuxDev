@@ -1,4 +1,5 @@
 import { selectRoot, useEditor } from '../../state/editorStore'
+import { dialog } from '../../state/dialogStore'
 import { useI18n } from '../../i18n/I18nContext'
 
 /** Library of reusable whole-screen designs ("자주 쓰는 화면 디자인"). */
@@ -12,7 +13,7 @@ export function TemplateLibrary() {
 
   const onSave = async () => {
     if (!hasSurface) return
-    const name = window.prompt(t.promptTemplateName, '')
+    const name = await dialog.prompt(t.promptTemplateName, '')
     if (!name) return
     await saveAsTemplate(name.trim())
   }
