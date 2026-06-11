@@ -101,6 +101,21 @@ function renderModal(node: NodeInstance, css: CSSProperties): React.ReactNode {
   )
 }
 
+/** Split a comma-separated prop into a trimmed list. */
+function splitList(v: unknown): string[] {
+  return String(v ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+}
+
+const ALERT_STYLES: Record<string, [string, string, string]> = {
+  info: ['#dbeafe', '#2563eb', 'ℹ️'],
+  success: ['#dcfce7', '#16a34a', '✅'],
+  warning: ['#fef3c7', '#d97706', '⚠️'],
+  error: ['#fee2e2', '#dc2626', '⛔']
+}
+
 /** Render the inner content of a primitive (the outer positioned box is the canvas's job). */
 export function renderPrimitive(node: NodeInstance): React.ReactNode {
   const css = { ...fill, ...toCss(node.style) }
@@ -307,6 +322,203 @@ export function renderPrimitive(node: NodeInstance): React.ReactNode {
               {it}
             </div>
           ))}
+        </div>
+      )
+    }
+    case 'bottomsheet':
+      return (
+        <div style={{ ...css, background: css.background ?? '#fff', borderTopLeftRadius: 16, borderTopRightRadius: 16, boxShadow: '0 -4px 20px rgba(0,0,0,0.15)' }}>
+          <div style={{ position: 'absolute', top: 8, left: '50%', transform: 'translateX(-50%)', width: 40, height: 4, borderRadius: 2, background: '#cbd5e1' }} />
+          <div style={{ padding: '20px 16px 8px', fontWeight: 700 }}>{p.title ?? ''}</div>
+        </div>
+      )
+    case 'accordion': {
+      const items = splitList(p.items)
+      const open = Number(p.openIndex ?? 0)
+      return (
+        <div style={{ ...css, border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          {items.map((it, i) => (
+            <div key={i} style={{ borderTop: i ? '1px solid #e2e8f0' : 'none' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', fontWeight: 600, background: i === open ? '#f8fafc' : '#fff' }}>
+                {it}
+                <span>{i === open ? '▾' : '▸'}</span>
+              </div>
+              {i === open && <div style={{ padding: '8px 12px', color: '#64748b', fontSize: 12 }}>내용…</div>}
+            </div>
+          ))}
+        </div>
+      )
+    }
+    case 'segmented': {
+      const opts = splitList(p.options)
+      const val = Number(p.value ?? 0)
+      return (
+        <div style={{ ...css, display: 'flex', background: '#e2e8f0', borderRadius: 8, padding: 2 }}>
+          {opts.map((o, i) => (
+            <div key={i} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 6, background: i === val ? '#fff' : 'transparent', color: i === val ? '#0f172a' : '#64748b', fontWeight: i === val ? 600 : 400, boxShadow: i === val ? '0 1px 2px rgba(0,0,0,0.1)' : 'none' }}>
+              {o}
+            </div>
+          ))}
+        </div>
+      )
+    }
+    case 'listitem':
+      return (
+        <div style={{ ...css, display: 'flex', alignItems: 'center', gap: 12, padding: '0 12px', background: css.background ?? '#fff', borderBottom: '1px solid #f1f5f9' }}>
+          <span style={{ fontSize: 22 }}>{p.leading ?? ''}</span>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+            <span style={{ fontWeight: 600 }}>{p.title ?? ''}</span>
+            <span style={{ fontSize: 12, color: '#94a3b8' }}>{p.subtitle ?? ''}</span>
+          </div>
+          <span style={{ color: '#94a3b8' }}>{p.trailing ?? ''}</span>
+        </div>
+      )
+    case 'spinner': {
+      const d = Math.max(12, Math.min(node.layout.w, node.layout.h) - 8)
+      return (
+        <div style={{ ...css, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="uiux-spinner" style={{ width: d, height: d, borderTopColor: (p.color as string) || '#2563eb' }} />
+        </div>
+      )
+    }
+    case 'carousel': {
+      const dots = Number(p.count ?? 0)
+      const active = Number(p.active ?? 0)
+      return (
+        <div style={{ ...css, position: 'relative', background: '#e2e8f0', borderRadius: css.borderRadius ?? 10, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', color: '#64748b' }}>
+          <span>🖼 {p.label ?? ''}</span>
+          <div style={{ position: 'absolute', bottom: 8, left: 0, right: 0, display: 'flex', gap: 6, justifyContent: 'center' }}>
+            {Array.from({ length: dots }).map((_, i) => (
+              <span key={i} style={{ width: 7, height: 7, borderRadius: '50%', background: i === active ? '#2563eb' : '#cbd5e1' }} />
+            ))}
+          </div>
+        </div>
+      )
+    }
+    case 'alertcard': {
+      const c = ALERT_STYLES[(p.variant as string) || 'info'] ?? ALERT_STYLES.info
+      return (
+        <div style={{ ...css, display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 12px', background: css.background ?? c[0], borderLeft: `4px solid ${c[1]}`, borderRadius: css.borderRadius ?? 8 }}>
+          <span>{c[2]}</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 700 }}>{p.title ?? ''}</div>
+            <div style={{ fontSize: 12, color: '#475569' }}>{p.message ?? ''}</div>
+          </div>
+          {Boolean(node.props.closable) && <span style={{ color: '#94a3b8' }}>×</span>}
+        </div>
+      )
+    }
+    case 'tabs': {
+      const items = splitList(p.items)
+      const active = Number(p.active ?? 0)
+      return (
+        <div style={{ ...css, display: 'flex', alignItems: 'flex-end', borderBottom: '1px solid #e2e8f0' }}>
+          {items.map((it, i) => (
+            <div key={i} style={{ padding: '8px 14px', fontWeight: i === active ? 600 : 400, color: i === active ? '#2563eb' : '#64748b', borderBottom: i === active ? '2px solid #2563eb' : '2px solid transparent', marginBottom: -1 }}>
+              {it}
+            </div>
+          ))}
+        </div>
+      )
+    }
+    case 'dropdown':
+      return (
+        <div style={{ ...css, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '0 10px', border: '1px solid #cbd5e1', borderRadius: css.borderRadius ?? 6, background: css.background ?? '#fff', color: p.value ? (css.color ?? '#0f172a') : '#94a3b8' }}>
+          <span>{p.value || p.placeholder || ''}</span>
+          <span style={{ color: '#64748b' }}>▾</span>
+        </div>
+      )
+    case 'card':
+      return (
+        <div style={{ ...css, background: css.background ?? '#fff', border: '1px solid #e2e8f0', borderRadius: css.borderRadius ?? 12, boxShadow: '0 1px 3px rgba(0,0,0,0.1)', overflow: 'hidden' }}>
+          {p.title ? <div style={{ padding: '10px 14px', borderBottom: '1px solid #f1f5f9', fontWeight: 700 }}>{p.title}</div> : null}
+        </div>
+      )
+    case 'navbar': {
+      const items = splitList(p.items)
+      const active = Number(p.active ?? 0)
+      return (
+        <div style={{ ...css, display: 'flex', alignItems: 'center', gap: 24, padding: '0 20px', background: css.background ?? '#0f172a', color: css.color ?? '#fff' }}>
+          <span style={{ fontWeight: 800 }}>{p.brand ?? ''}</span>
+          <div style={{ display: 'flex', gap: 18, marginLeft: 'auto' }}>
+            {items.map((it, i) => (
+              <span key={i} style={{ opacity: i === active ? 1 : 0.7, fontWeight: i === active ? 700 : 400 }}>
+                {it}
+              </span>
+            ))}
+          </div>
+        </div>
+      )
+    }
+    case 'sidebar': {
+      const items = splitList(p.items)
+      const icons = splitList(p.icons)
+      const active = Number(p.active ?? 0)
+      return (
+        <div style={{ ...css, display: 'flex', flexDirection: 'column', padding: '12px 8px', gap: 4, background: css.background ?? '#0f172a', color: '#cbd5e1' }}>
+          {items.map((it, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 8, background: i === active ? '#1e293b' : 'transparent', color: i === active ? '#fff' : '#cbd5e1' }}>
+              <span>{icons[i] || '•'}</span>
+              {it}
+            </div>
+          ))}
+        </div>
+      )
+    }
+    case 'breadcrumb': {
+      const items = splitList(p.items)
+      return (
+        <div style={{ ...css, display: 'flex', alignItems: 'center', gap: 6, color: '#64748b', fontSize: css.fontSize ?? 13 }}>
+          {items.map((it, i) => (
+            <span key={i} style={{ display: 'flex', gap: 6 }}>
+              {i > 0 && <span style={{ opacity: 0.5 }}>/</span>}
+              <span style={{ color: i === items.length - 1 ? '#0f172a' : '#64748b' }}>{it}</span>
+            </span>
+          ))}
+        </div>
+      )
+    }
+    case 'pagination': {
+      const pages = Number(p.pages ?? 0)
+      const active = Number(p.active ?? 1)
+      const cell = (on: boolean): React.CSSProperties => ({
+        minWidth: 26,
+        height: 26,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: 6,
+        border: '1px solid #e2e8f0',
+        background: on ? '#2563eb' : '#fff',
+        color: on ? '#fff' : '#0f172a'
+      })
+      return (
+        <div style={{ ...css, display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'center' }}>
+          <span style={cell(false)}>‹</span>
+          {Array.from({ length: pages }).map((_, i) => (
+            <span key={i} style={cell(i + 1 === active)}>{i + 1}</span>
+          ))}
+          <span style={cell(false)}>›</span>
+        </div>
+      )
+    }
+    case 'menubar': {
+      const items = splitList(p.items)
+      return (
+        <div style={{ ...css, display: 'flex', alignItems: 'center', background: css.background ?? '#f1f5f9', borderBottom: '1px solid #e2e8f0', fontSize: 13 }}>
+          {items.map((it, i) => (
+            <span key={i} style={{ padding: '0 12px', lineHeight: `${node.layout.h}px` }}>{it}</span>
+          ))}
+        </div>
+      )
+    }
+    case 'statcard': {
+      const up = !String(p.delta ?? '').trim().startsWith('-')
+      return (
+        <div style={{ ...css, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 4, padding: '12px 16px', background: css.background ?? '#fff', border: '1px solid #e2e8f0', borderRadius: css.borderRadius ?? 12, boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
+          <span style={{ fontSize: 12, color: '#64748b' }}>{p.label ?? ''}</span>
+          <span style={{ fontSize: 24, fontWeight: 800 }}>{p.value ?? ''}</span>
+          <span style={{ fontSize: 12, color: up ? '#16a34a' : '#dc2626' }}>{p.delta ?? ''}</span>
         </div>
       )
     }

@@ -14,6 +14,7 @@ export function exportScreenToHtml(screen: Screen, components: CustomComponent[]
   body { margin: 0; background: #f1f5f9; }
   .uiux-screen { position: relative; margin: 0 auto; background: #fff; overflow: hidden; }
   .uiux-node { position: absolute; }
+  @keyframes uiux-spin { to { transform: rotate(360deg); } }
 </style>
 </head>
 <body>
@@ -92,6 +93,14 @@ function injectSpecAttrs(html: string, attrs: string): string {
 function box(node: NodeInstance, extra = ''): string {
   const { x, y, w, h } = node.layout
   return `left:${x}px;top:${y}px;width:${w}px;height:${h}px;${extra}`
+}
+
+/** Split a comma-separated prop into a trimmed list. */
+function listOf(v: unknown): string[] {
+  return String(v ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
 }
 
 interface GridCol {
@@ -223,6 +232,87 @@ ${inner}
       return `<div class="uiux-node" style="${box(node, `display:flex;align-items:center;justify-content:center;${node.props.showOverlay !== false ? 'background:rgba(15,23,42,0.35);' : ''}`)}"><div style="width:90%;background:#fff;border:1px solid #e2e8f0;border-radius:10px;box-shadow:0 8px 30px rgba(0,0,0,0.2);padding:16px;">${'<div style="font-weight:700;margin-bottom:8px;">' + escapeHtml(p.title ?? 'Title') + '</div>'}<div style="color:#334155;margin-bottom:12px;white-space:pre-wrap;">${escapeHtml(p.message ?? '')}</div><div style="display:flex;justify-content:flex-end;gap:8px;">${p.cancelText ? `<button>${escapeHtml(p.cancelText)}</button>` : ''}<button style="background:#2563eb;color:#fff;border:none;border-radius:6px;padding:6px 12px;">${escapeHtml(p.confirmText ?? 'OK')}</button></div></div></div>`
     case 'annotation':
       return `<div class="uiux-node" style="${box(node, 'background:#fff8c5;border:1px solid #e3c000;border-radius:6px;padding:8px;font-size:12px;overflow:auto;')}"><div style="white-space:pre-wrap;">${escapeHtml(p.text ?? '')}</div>${p.link ? `<a href="${escapeHtml(p.link)}" style="color:#2563eb;font-size:11px;">${escapeHtml(p.link)}</a>` : ''}</div>`
+    case 'bottomsheet':
+      return `<div class="uiux-node" style="${box(node, 'background:#fff;border-radius:16px 16px 0 0;box-shadow:0 -4px 20px rgba(0,0,0,0.15);')}"><div style="position:absolute;top:8px;left:50%;transform:translateX(-50%);width:40px;height:4px;border-radius:2px;background:#cbd5e1;"></div><div style="padding:20px 16px 8px;font-weight:700;">${escapeHtml(p.title ?? '')}</div>\n${children}</div>`
+    case 'accordion': {
+      const items = listOf(p.items)
+      const open = Number(p.openIndex ?? 0)
+      const rows = items
+        .map(
+          (it, i) =>
+            `<div style="border-top:${i ? '1px solid #e2e8f0' : 'none'};"><div style="display:flex;justify-content:space-between;padding:8px 12px;font-weight:600;background:${i === open ? '#f8fafc' : '#fff'};">${escapeHtml(it)}<span>${i === open ? '▾' : '▸'}</span></div>${i === open ? '<div style="padding:8px 12px;color:#64748b;font-size:12px;">내용…</div>' : ''}</div>`
+        )
+        .join('')
+      return `<div class="uiux-node" style="${box(node, 'border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;')}">${rows}</div>`
+    }
+    case 'segmented': {
+      const opts = listOf(p.options)
+      const val = Number(p.value ?? 0)
+      const segs = opts
+        .map((o, i) => `<div style="flex:1;display:flex;align-items:center;justify-content:center;border-radius:6px;background:${i === val ? '#fff' : 'transparent'};color:${i === val ? '#0f172a' : '#64748b'};font-weight:${i === val ? 600 : 400};">${escapeHtml(o)}</div>`)
+        .join('')
+      return `<div class="uiux-node" style="${box(node, 'display:flex;background:#e2e8f0;border-radius:8px;padding:2px;')}">${segs}</div>`
+    }
+    case 'listitem':
+      return `<div class="uiux-node" style="${box(node, 'display:flex;align-items:center;gap:12px;padding:0 12px;background:#fff;border-bottom:1px solid #f1f5f9;')}"><span style="font-size:22px;">${escapeHtml(p.leading ?? '')}</span><div style="flex:1;display:flex;flex-direction:column;"><span style="font-weight:600;">${escapeHtml(p.title ?? '')}</span><span style="font-size:12px;color:#94a3b8;">${escapeHtml(p.subtitle ?? '')}</span></div><span style="color:#94a3b8;">${escapeHtml(p.trailing ?? '')}</span></div>`
+    case 'spinner': {
+      const d = Math.max(12, Math.min(node.layout.w, node.layout.h) - 8)
+      return `<div class="uiux-node" style="${box(node, 'display:flex;align-items:center;justify-content:center;')}"><div style="width:${d}px;height:${d}px;border:3px solid #e2e8f0;border-top-color:${escapeHtml((p.color as string) || '#2563eb')};border-radius:50%;animation:uiux-spin .8s linear infinite;"></div></div>`
+    }
+    case 'carousel': {
+      const dots = Number(p.count ?? 0)
+      const active = Number(p.active ?? 0)
+      const dotEls = Array.from({ length: dots }).map((_, i) => `<span style="width:7px;height:7px;border-radius:50%;background:${i === active ? '#2563eb' : '#cbd5e1'};"></span>`).join('')
+      return `<div class="uiux-node" style="${box(node, 'position:relative;background:#e2e8f0;border-radius:10px;display:flex;align-items:center;justify-content:center;overflow:hidden;color:#64748b;')}"><span>🖼 ${escapeHtml(p.label ?? '')}</span><div style="position:absolute;bottom:8px;left:0;right:0;display:flex;gap:6px;justify-content:center;">${dotEls}</div></div>`
+    }
+    case 'alertcard': {
+      const map: Record<string, [string, string, string]> = { info: ['#dbeafe', '#2563eb', 'ℹ️'], success: ['#dcfce7', '#16a34a', '✅'], warning: ['#fef3c7', '#d97706', '⚠️'], error: ['#fee2e2', '#dc2626', '⛔'] }
+      const c = map[(p.variant as string) || 'info'] ?? map.info
+      return `<div class="uiux-node" style="${box(node, `display:flex;align-items:flex-start;gap:10px;padding:10px 12px;background:${c[0]};border-left:4px solid ${c[1]};border-radius:8px;`)}"><span>${c[2]}</span><div style="flex:1;"><div style="font-weight:700;">${escapeHtml(p.title ?? '')}</div><div style="font-size:12px;color:#475569;">${escapeHtml(p.message ?? '')}</div></div>${node.props.closable ? '<span style="color:#94a3b8;">×</span>' : ''}</div>`
+    }
+    case 'tabs': {
+      const items = listOf(p.items)
+      const active = Number(p.active ?? 0)
+      const tabEls = items.map((it, i) => `<div style="padding:8px 14px;font-weight:${i === active ? 600 : 400};color:${i === active ? '#2563eb' : '#64748b'};border-bottom:2px solid ${i === active ? '#2563eb' : 'transparent'};margin-bottom:-1px;">${escapeHtml(it)}</div>`).join('')
+      return `<div class="uiux-node" style="${box(node, 'display:flex;align-items:flex-end;border-bottom:1px solid #e2e8f0;')}">${tabEls}</div>`
+    }
+    case 'dropdown':
+      return `<div class="uiux-node" style="${box(node, `display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 10px;border:1px solid #cbd5e1;border-radius:6px;background:#fff;color:${p.value ? '#0f172a' : '#94a3b8'};`)}"><span>${escapeHtml(p.value || p.placeholder || '')}</span><span style="color:#64748b;">▾</span></div>`
+    case 'card':
+      return `<div class="uiux-node" style="${box(node, 'background:#fff;border:1px solid #e2e8f0;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,0.1);overflow:hidden;')}">${p.title ? `<div style="padding:10px 14px;border-bottom:1px solid #f1f5f9;font-weight:700;">${escapeHtml(p.title)}</div>` : ''}\n${children}</div>`
+    case 'navbar': {
+      const items = listOf(p.items)
+      const active = Number(p.active ?? 0)
+      const links = items.map((it, i) => `<span style="opacity:${i === active ? 1 : 0.7};font-weight:${i === active ? 700 : 400};">${escapeHtml(it)}</span>`).join('')
+      return `<div class="uiux-node" style="${box(node, 'display:flex;align-items:center;gap:24px;padding:0 20px;background:#0f172a;color:#fff;')}"><span style="font-weight:800;">${escapeHtml(p.brand ?? '')}</span><div style="display:flex;gap:18px;margin-left:auto;">${links}</div></div>`
+    }
+    case 'sidebar': {
+      const items = listOf(p.items)
+      const icons = listOf(p.icons)
+      const active = Number(p.active ?? 0)
+      const rows = items.map((it, i) => `<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;background:${i === active ? '#1e293b' : 'transparent'};color:${i === active ? '#fff' : '#cbd5e1'};"><span>${escapeHtml(icons[i] || '•')}</span>${escapeHtml(it)}</div>`).join('')
+      return `<div class="uiux-node" style="${box(node, 'display:flex;flex-direction:column;padding:12px 8px;gap:4px;background:#0f172a;color:#cbd5e1;')}">${rows}</div>`
+    }
+    case 'breadcrumb': {
+      const items = listOf(p.items)
+      const parts = items.map((it, i) => `${i > 0 ? '<span style="opacity:.5;">/</span>' : ''}<span style="color:${i === items.length - 1 ? '#0f172a' : '#64748b'};">${escapeHtml(it)}</span>`).join('')
+      return `<div class="uiux-node" style="${box(node, 'display:flex;align-items:center;gap:6px;color:#64748b;font-size:13px;')}">${parts}</div>`
+    }
+    case 'pagination': {
+      const pages = Number(p.pages ?? 0)
+      const active = Number(p.active ?? 1)
+      const cell = (on: boolean, label: string) => `<span style="min-width:26px;height:26px;display:flex;align-items:center;justify-content:center;border-radius:6px;border:1px solid #e2e8f0;background:${on ? '#2563eb' : '#fff'};color:${on ? '#fff' : '#0f172a'};">${label}</span>`
+      const nums = Array.from({ length: pages }).map((_, i) => cell(i + 1 === active, String(i + 1))).join('')
+      return `<div class="uiux-node" style="${box(node, 'display:flex;align-items:center;gap:4px;justify-content:center;')}">${cell(false, '‹')}${nums}${cell(false, '›')}</div>`
+    }
+    case 'menubar': {
+      const items = listOf(p.items).map((it) => `<span style="padding:0 12px;line-height:${node.layout.h}px;">${escapeHtml(it)}</span>`).join('')
+      return `<div class="uiux-node" style="${box(node, 'display:flex;align-items:center;background:#f1f5f9;border-bottom:1px solid #e2e8f0;font-size:13px;')}">${items}</div>`
+    }
+    case 'statcard': {
+      const up = !String(p.delta ?? '').trim().startsWith('-')
+      return `<div class="uiux-node" style="${box(node, 'display:flex;flex-direction:column;justify-content:center;gap:4px;padding:12px 16px;background:#fff;border:1px solid #e2e8f0;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,0.08);')}"><span style="font-size:12px;color:#64748b;">${escapeHtml(p.label ?? '')}</span><span style="font-size:24px;font-weight:800;">${escapeHtml(p.value ?? '')}</span><span style="font-size:12px;color:${up ? '#16a34a' : '#dc2626'};">${escapeHtml(p.delta ?? '')}</span></div>`
+    }
     case 'container':
     case 'row':
     case 'column':

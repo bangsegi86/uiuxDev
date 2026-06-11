@@ -1028,6 +1028,36 @@ textarea {
   margin-right: 8px;
 }
 
+/* ---- spinner ---- */
+.uiux-spinner {
+  border: 3px solid #e2e8f0;
+  border-top-color: #2563eb;
+  border-radius: 50%;
+  animation: uiux-spin 0.8s linear infinite;
+}
+@keyframes uiux-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ---- palette categories ---- */
+.palette-cat {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 12px 2px 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.palette-cat:first-child {
+  border-top: none;
+  padding-top: 0;
+  margin-top: 4px;
+}
+
 /* ---- developer spec ---- */
 .spec-badge {
   position: absolute;

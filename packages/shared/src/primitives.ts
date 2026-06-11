@@ -429,8 +429,237 @@ export const PRIMITIVES: PrimitiveDef[] = [
       { key: 'active', label: 'Active index', kind: 'number', target: 'props', default: 0 },
       ...COMMON_STYLE_FIELDS
     ]
+  },
+  {
+    type: 'bottomsheet',
+    label: 'Bottom sheet',
+    icon: '🛋',
+    container: true,
+    defaultLayout: { w: 390, h: 300 },
+    fields: [
+      { key: 'title', label: 'Title', kind: 'text', target: 'props', default: '옵션' },
+      ...COMMON_STYLE_FIELDS
+    ]
+  },
+  {
+    type: 'accordion',
+    label: 'Accordion',
+    icon: '🪗',
+    container: false,
+    defaultLayout: { w: 340, h: 168 },
+    fields: [
+      { key: 'items', label: 'Titles (comma)', kind: 'text', target: 'props', default: '섹션 1,섹션 2,섹션 3' },
+      { key: 'openIndex', label: 'Open index', kind: 'number', target: 'props', default: 0 },
+      ...COMMON_STYLE_FIELDS
+    ]
+  },
+  {
+    type: 'segmented',
+    label: 'Segmented control',
+    icon: '⛶',
+    container: false,
+    defaultLayout: { w: 260, h: 34 },
+    fields: [
+      { key: 'options', label: 'Options (comma)', kind: 'text', target: 'props', default: '전체,진행중,완료' },
+      { key: 'value', label: 'Active index', kind: 'number', target: 'props', default: 0 },
+      ...COMMON_STYLE_FIELDS
+    ]
+  },
+  {
+    type: 'listitem',
+    label: 'List item',
+    icon: '☰',
+    container: false,
+    defaultLayout: { w: 360, h: 56 },
+    fields: [
+      { key: 'leading', label: 'Leading icon', kind: 'text', target: 'props', default: '👤' },
+      { key: 'title', label: 'Title', kind: 'text', target: 'props', default: '제목' },
+      { key: 'subtitle', label: 'Subtitle', kind: 'text', target: 'props', default: '부제목' },
+      { key: 'trailing', label: 'Trailing', kind: 'text', target: 'props', default: '›' },
+      ...COMMON_STYLE_FIELDS
+    ]
+  },
+  {
+    type: 'spinner',
+    label: 'Spinner / Loading',
+    icon: '◌',
+    container: false,
+    defaultLayout: { w: 40, h: 40 },
+    fields: [
+      { key: 'color', label: 'Color', kind: 'text', target: 'props', default: '#2563eb' },
+      ...COMMON_STYLE_FIELDS
+    ]
+  },
+  {
+    type: 'carousel',
+    label: 'Carousel',
+    icon: '🖼',
+    container: false,
+    defaultLayout: { w: 320, h: 180 },
+    fields: [
+      { key: 'label', label: 'Slide label', kind: 'text', target: 'props', default: 'Slide 1' },
+      { key: 'count', label: 'Dots', kind: 'number', target: 'props', default: 3 },
+      { key: 'active', label: 'Active index', kind: 'number', target: 'props', default: 0 },
+      ...COMMON_STYLE_FIELDS
+    ]
+  },
+  {
+    type: 'alertcard',
+    label: 'Alert / Notice card',
+    icon: '📢',
+    container: false,
+    defaultLayout: { w: 360, h: 72 },
+    fields: [
+      { key: 'title', label: 'Title', kind: 'text', target: 'props', default: '안내' },
+      { key: 'message', label: 'Message', kind: 'text', target: 'props', default: '메시지를 입력하세요' },
+      {
+        key: 'variant',
+        label: 'Variant',
+        kind: 'select',
+        target: 'props',
+        default: 'info',
+        options: [
+          { label: 'Info', value: 'info' },
+          { label: 'Success', value: 'success' },
+          { label: 'Warning', value: 'warning' },
+          { label: 'Error', value: 'error' }
+        ]
+      },
+      { key: 'closable', label: 'Closable', kind: 'boolean', target: 'props', default: true },
+      ...COMMON_STYLE_FIELDS
+    ]
+  },
+  {
+    type: 'tabs',
+    label: 'Tabs',
+    icon: '🗂',
+    container: false,
+    defaultLayout: { w: 480, h: 40 },
+    fields: [
+      { key: 'items', label: 'Tabs (comma)', kind: 'text', target: 'props', default: '개요,상세,리뷰' },
+      { key: 'active', label: 'Active index', kind: 'number', target: 'props', default: 0 },
+      ...COMMON_STYLE_FIELDS
+    ]
+  },
+  {
+    type: 'dropdown',
+    label: 'Dropdown / Select',
+    icon: '▾',
+    container: false,
+    defaultLayout: { w: 200, h: 40 },
+    fields: [
+      { key: 'value', label: 'Value', kind: 'text', target: 'props', default: '선택' },
+      { key: 'placeholder', label: 'Placeholder', kind: 'text', target: 'props', default: '선택하세요' },
+      ...COMMON_STYLE_FIELDS
+    ]
+  },
+  {
+    type: 'card',
+    label: 'Card',
+    icon: '🃏',
+    container: true,
+    defaultLayout: { w: 320, h: 200 },
+    fields: [
+      { key: 'title', label: 'Title', kind: 'text', target: 'props', default: '카드 제목' },
+      ...COMMON_STYLE_FIELDS
+    ]
+  },
+  {
+    type: 'navbar',
+    label: 'Top nav bar',
+    icon: '🧭',
+    container: false,
+    defaultLayout: { w: 1280, h: 56 },
+    fields: [
+      { key: 'brand', label: 'Brand', kind: 'text', target: 'props', default: 'Brand' },
+      { key: 'items', label: 'Items (comma)', kind: 'text', target: 'props', default: 'Home,Products,Pricing,About' },
+      { key: 'active', label: 'Active index', kind: 'number', target: 'props', default: 0 },
+      ...COMMON_STYLE_FIELDS
+    ]
+  },
+  {
+    type: 'sidebar',
+    label: 'Sidebar menu',
+    icon: '▥',
+    container: false,
+    defaultLayout: { w: 240, h: 600 },
+    fields: [
+      { key: 'items', label: 'Items (comma)', kind: 'text', target: 'props', default: '대시보드,사용자,설정,로그' },
+      { key: 'icons', label: 'Icons (comma)', kind: 'text', target: 'props', default: '📊,👥,⚙️,📄' },
+      { key: 'active', label: 'Active index', kind: 'number', target: 'props', default: 0 },
+      ...COMMON_STYLE_FIELDS
+    ]
+  },
+  {
+    type: 'breadcrumb',
+    label: 'Breadcrumb',
+    icon: '⋯',
+    container: false,
+    defaultLayout: { w: 420, h: 28 },
+    fields: [
+      { key: 'items', label: 'Path (comma)', kind: 'text', target: 'props', default: 'Home,Products,Detail' },
+      ...COMMON_STYLE_FIELDS
+    ]
+  },
+  {
+    type: 'pagination',
+    label: 'Pagination',
+    icon: '⏭',
+    container: false,
+    defaultLayout: { w: 300, h: 36 },
+    fields: [
+      { key: 'pages', label: 'Pages', kind: 'number', target: 'props', default: 5 },
+      { key: 'active', label: 'Active page', kind: 'number', target: 'props', default: 1 },
+      ...COMMON_STYLE_FIELDS
+    ]
+  },
+  {
+    type: 'menubar',
+    label: 'Menu bar',
+    icon: '🍔',
+    container: false,
+    defaultLayout: { w: 1280, h: 32 },
+    fields: [
+      { key: 'items', label: 'Menus (comma)', kind: 'text', target: 'props', default: 'File,Edit,View,Help' },
+      ...COMMON_STYLE_FIELDS
+    ]
+  },
+  {
+    type: 'statcard',
+    label: 'Stat / KPI card',
+    icon: '📈',
+    container: false,
+    defaultLayout: { w: 220, h: 110 },
+    fields: [
+      { key: 'label', label: 'Label', kind: 'text', target: 'props', default: '총 매출' },
+      { key: 'value', label: 'Value', kind: 'text', target: 'props', default: '₩12.4M' },
+      { key: 'delta', label: 'Delta', kind: 'text', target: 'props', default: '+12.5%' },
+      ...COMMON_STYLE_FIELDS
+    ]
   }
 ]
+
+/** Palette grouping for the component list. */
+export type PrimitiveCategory = 'common' | 'pc' | 'mobile'
+
+const PC_TYPES = new Set(['navbar', 'sidebar', 'breadcrumb', 'pagination', 'menubar', 'statcard'])
+const MOBILE_TYPES = new Set([
+  'toggle',
+  'toast',
+  'fab',
+  'bottomnav',
+  'bottomsheet',
+  'segmented',
+  'listitem',
+  'carousel'
+])
+
+/** Which palette group a primitive belongs to (defaults to common). */
+export function categoryOf(type: string): PrimitiveCategory {
+  if (PC_TYPES.has(type)) return 'pc'
+  if (MOBILE_TYPES.has(type)) return 'mobile'
+  return 'common'
+}
 
 const PRIMITIVE_BY_TYPE: Record<string, PrimitiveDef> = Object.fromEntries(
   PRIMITIVES.map((p) => [p.type, p])
