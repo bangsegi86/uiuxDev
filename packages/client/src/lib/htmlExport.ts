@@ -154,6 +154,58 @@ ${inner}
       return `<div class="uiux-node" style="${box(node)}background:${node.style.background || '#d0d0d0'};"></div>`
     case 'icon':
       return `<div class="uiux-node" style="${box(node, 'display:flex;align-items:center;justify-content:center;')}${style}">${escapeHtml(p.glyph ?? '★')}</div>`
+    case 'toggle': {
+      const on = Boolean(node.props.checked)
+      const onColor = (p.onColor as string) || '#2563eb'
+      return `<div class="uiux-node" style="${box(node, 'display:flex;align-items:center;justify-content:space-between;gap:8px;')}${style}"><span>${escapeHtml(p.label ?? '')}</span><span style="position:relative;width:40px;height:24px;border-radius:12px;flex:0 0 auto;background:${on ? onColor : '#cbd5e1'};"><span style="position:absolute;top:2px;left:${on ? 18 : 2}px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.3);"></span></span></div>`
+    }
+    case 'toast': {
+      const variant = (p.variant as string) || 'info'
+      const colors: Record<string, string> = { info: '#334155', success: '#16a34a', warning: '#d97706', error: '#dc2626' }
+      const icons: Record<string, string> = { info: 'ℹ️', success: '✅', warning: '⚠️', error: '⛔' }
+      return `<div class="uiux-node" style="${box(node, `display:flex;align-items:center;gap:8px;padding:0 12px;color:#fff;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.2);background:${colors[variant]};`)}${style}"><span>${icons[variant]}</span><span style="flex:1;">${escapeHtml(p.message ?? '')}</span>${p.action ? `<span style="font-weight:700;color:#93c5fd;">${escapeHtml(p.action)}</span>` : ''}</div>`
+    }
+    case 'badge':
+      return `<div class="uiux-node" style="${box(node, 'display:flex;align-items:center;justify-content:center;border-radius:999px;font-weight:700;font-size:12px;background:#dc2626;color:#fff;')}${style}">${node.props.dot ? '' : escapeHtml(p.text ?? '')}</div>`
+    case 'avatar': {
+      const radius = (p.shape ?? 'circle') === 'circle' ? '50%' : '8px'
+      return p.src
+        ? `<img class="uiux-node" src="${escapeHtml(p.src)}" alt="" style="${box(node, `object-fit:cover;border-radius:${radius};`)}" />`
+        : `<div class="uiux-node" style="${box(node, `display:flex;align-items:center;justify-content:center;font-weight:600;background:#94a3b8;color:#fff;border-radius:${radius};`)}${style}">${escapeHtml(p.initials ?? '')}</div>`
+    }
+    case 'chip':
+      return `<div class="uiux-node" style="${box(node, 'display:flex;align-items:center;justify-content:center;gap:6px;border-radius:999px;padding:0 10px;font-size:13px;background:#e2e8f0;color:#0f172a;')}${style}"><span>${escapeHtml(p.text ?? '')}</span>${node.props.removable ? '<span style="opacity:.6;">×</span>' : ''}</div>`
+    case 'fab':
+      return `<div class="uiux-node" style="${box(node, 'display:flex;align-items:center;justify-content:center;border-radius:50%;font-size:24px;background:#2563eb;color:#fff;box-shadow:0 4px 12px rgba(0,0,0,.3);')}${style}">${escapeHtml(p.glyph ?? '＋')}</div>`
+    case 'searchbar':
+      return `<div class="uiux-node" style="${box(node, 'display:flex;align-items:center;gap:8px;padding:0 12px;border-radius:999px;background:#f1f5f9;color:#64748b;')}${style}">🔍 <span>${escapeHtml(p.placeholder ?? '')}</span></div>`
+    case 'slider': {
+      const min = Number(p.min ?? 0)
+      const max = Number(p.max ?? 100)
+      const pct = max > min ? Math.max(0, Math.min(100, ((Number(p.value ?? 0) - min) / (max - min)) * 100)) : 0
+      return `<div class="uiux-node" style="${box(node, 'display:flex;align-items:center;')}"><div style="position:relative;width:100%;height:4px;background:#cbd5e1;border-radius:2px;"><div style="position:absolute;left:0;top:0;height:4px;width:${pct}%;background:#2563eb;border-radius:2px;"></div><div style="position:absolute;left:${pct}%;top:-6px;margin-left:-8px;width:16px;height:16px;border-radius:50%;background:#fff;border:2px solid #2563eb;"></div></div></div>`
+    }
+    case 'progress': {
+      const pct = Math.max(0, Math.min(100, Number(p.value ?? 0)))
+      return `<div class="uiux-node" style="${box(node, 'border-radius:999px;overflow:hidden;background:#e2e8f0;')}"><div style="height:100%;width:${pct}%;background:#2563eb;"></div></div>`
+    }
+    case 'stepper':
+      return `<div class="uiux-node" style="${box(node, 'display:flex;align-items:center;border:1px solid #cbd5e1;border-radius:8px;overflow:hidden;')}${style}"><span style="width:32px;text-align:center;border-right:1px solid #e2e8f0;">−</span><span style="flex:1;text-align:center;">${escapeHtml(String(p.value ?? 0))}</span><span style="width:32px;text-align:center;border-left:1px solid #e2e8f0;">＋</span></div>`
+    case 'rating': {
+      const val = Number(p.value ?? 0)
+      const max = Number(p.max ?? 5)
+      const stars = Array.from({ length: max }).map((_, i) => (i < val ? '★' : '☆')).join('')
+      return `<div class="uiux-node" style="${box(node, 'display:flex;align-items:center;gap:2px;font-size:18px;color:#f59e0b;')}">${stars}</div>`
+    }
+    case 'bottomnav': {
+      const items = String(p.items ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+      const icons = String(p.icons ?? '').split(',').map((s) => s.trim())
+      const active = Number(p.active ?? 0)
+      const cells = items
+        .map((it, i) => `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:11px;color:${i === active ? '#2563eb' : '#94a3b8'};"><span style="font-size:18px;">${escapeHtml(icons[i] || '•')}</span>${escapeHtml(it)}</div>`)
+        .join('')
+      return `<div class="uiux-node" style="${box(node, 'display:flex;align-items:center;background:#fff;border-top:1px solid #e2e8f0;')}">${cells}</div>`
+    }
     case 'checkbox':
       return `<label class="uiux-node" style="${box(node, 'display:flex;align-items:center;gap:6px;')}"><input type="checkbox" ${node.props.checked ? 'checked' : ''} ${node.props.readonly ? 'disabled' : ''}/> <span>${escapeHtml(p.label ?? 'Checkbox')}${node.props.required ? ' *' : ''}</span></label>`
     case 'radio': {

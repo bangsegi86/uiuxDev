@@ -262,6 +262,173 @@ export const PRIMITIVES: PrimitiveDef[] = [
       { key: 'glyph', label: 'Glyph', kind: 'text', target: 'props', default: '★' },
       ...COMMON_STYLE_FIELDS
     ]
+  },
+  {
+    type: 'toggle',
+    label: 'Toggle / Switch',
+    icon: '🔘',
+    container: false,
+    defaultLayout: { w: 160, h: 32 },
+    fields: [
+      { key: 'label', label: 'Label', kind: 'text', target: 'props', default: 'Enabled' },
+      { key: 'checked', label: 'On', kind: 'boolean', target: 'props', default: true },
+      { key: 'onColor', label: 'On color', kind: 'text', target: 'props', default: '#2563eb' },
+      ...COMMON_STYLE_FIELDS
+    ]
+  },
+  {
+    type: 'toast',
+    label: 'Toast / Snackbar',
+    icon: '🍞',
+    container: false,
+    defaultLayout: { w: 320, h: 48 },
+    fields: [
+      { key: 'message', label: 'Message', kind: 'text', target: 'props', default: '저장되었습니다' },
+      {
+        key: 'variant',
+        label: 'Variant',
+        kind: 'select',
+        target: 'props',
+        default: 'info',
+        options: [
+          { label: 'Info', value: 'info' },
+          { label: 'Success', value: 'success' },
+          { label: 'Warning', value: 'warning' },
+          { label: 'Error', value: 'error' }
+        ]
+      },
+      { key: 'action', label: 'Action text', kind: 'text', target: 'props', default: '' },
+      ...COMMON_STYLE_FIELDS
+    ]
+  },
+  {
+    type: 'badge',
+    label: 'Badge',
+    icon: '🔴',
+    container: false,
+    defaultLayout: { w: 24, h: 24 },
+    fields: [
+      { key: 'text', label: 'Text / Count', kind: 'text', target: 'props', default: '3' },
+      { key: 'dot', label: 'Dot only', kind: 'boolean', target: 'props', default: false },
+      ...COMMON_STYLE_FIELDS
+    ]
+  },
+  {
+    type: 'avatar',
+    label: 'Avatar',
+    icon: '👤',
+    container: false,
+    defaultLayout: { w: 48, h: 48 },
+    fields: [
+      { key: 'src', label: 'Image URL', kind: 'text', target: 'props', default: '' },
+      { key: 'initials', label: 'Initials', kind: 'text', target: 'props', default: 'AB' },
+      {
+        key: 'shape',
+        label: 'Shape',
+        kind: 'select',
+        target: 'props',
+        default: 'circle',
+        options: [
+          { label: 'Circle', value: 'circle' },
+          { label: 'Square', value: 'square' }
+        ]
+      },
+      ...COMMON_STYLE_FIELDS
+    ]
+  },
+  {
+    type: 'chip',
+    label: 'Chip / Tag',
+    icon: '🏷',
+    container: false,
+    defaultLayout: { w: 88, h: 32 },
+    fields: [
+      { key: 'text', label: 'Text', kind: 'text', target: 'props', default: 'Tag' },
+      { key: 'removable', label: 'Removable', kind: 'boolean', target: 'props', default: false },
+      ...COMMON_STYLE_FIELDS
+    ]
+  },
+  {
+    type: 'fab',
+    label: 'Floating button',
+    icon: '➕',
+    container: false,
+    defaultLayout: { w: 56, h: 56 },
+    fields: [
+      { key: 'glyph', label: 'Glyph', kind: 'text', target: 'props', default: '＋' },
+      ...COMMON_STYLE_FIELDS
+    ]
+  },
+  {
+    type: 'searchbar',
+    label: 'Search bar',
+    icon: '🔍',
+    container: false,
+    defaultLayout: { w: 320, h: 40 },
+    fields: [
+      { key: 'placeholder', label: 'Placeholder', kind: 'text', target: 'props', default: '검색' },
+      ...COMMON_STYLE_FIELDS
+    ]
+  },
+  {
+    type: 'slider',
+    label: 'Slider',
+    icon: '🎚',
+    container: false,
+    defaultLayout: { w: 220, h: 32 },
+    fields: [
+      { key: 'value', label: 'Value', kind: 'number', target: 'props', default: 50 },
+      { key: 'min', label: 'Min', kind: 'number', target: 'props', default: 0 },
+      { key: 'max', label: 'Max', kind: 'number', target: 'props', default: 100 },
+      ...COMMON_STYLE_FIELDS
+    ]
+  },
+  {
+    type: 'progress',
+    label: 'Progress bar',
+    icon: '▰',
+    container: false,
+    defaultLayout: { w: 220, h: 8 },
+    fields: [
+      { key: 'value', label: 'Percent (0–100)', kind: 'number', target: 'props', default: 60 },
+      ...COMMON_STYLE_FIELDS
+    ]
+  },
+  {
+    type: 'stepper',
+    label: 'Stepper',
+    icon: '🔢',
+    container: false,
+    defaultLayout: { w: 120, h: 36 },
+    fields: [
+      { key: 'value', label: 'Value', kind: 'number', target: 'props', default: 1 },
+      ...COMMON_STYLE_FIELDS
+    ]
+  },
+  {
+    type: 'rating',
+    label: 'Rating (stars)',
+    icon: '⭐',
+    container: false,
+    defaultLayout: { w: 130, h: 26 },
+    fields: [
+      { key: 'value', label: 'Value', kind: 'number', target: 'props', default: 3 },
+      { key: 'max', label: 'Max', kind: 'number', target: 'props', default: 5 },
+      ...COMMON_STYLE_FIELDS
+    ]
+  },
+  {
+    type: 'bottomnav',
+    label: 'Bottom nav bar',
+    icon: '📱',
+    container: false,
+    defaultLayout: { w: 390, h: 56 },
+    fields: [
+      { key: 'items', label: 'Items (comma)', kind: 'text', target: 'props', default: 'Home,Search,Alerts,Profile' },
+      { key: 'icons', label: 'Icons (comma)', kind: 'text', target: 'props', default: '🏠,🔍,🔔,👤' },
+      { key: 'active', label: 'Active index', kind: 'number', target: 'props', default: 0 },
+      ...COMMON_STYLE_FIELDS
+    ]
   }
 ]
 

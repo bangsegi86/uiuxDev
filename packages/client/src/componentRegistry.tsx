@@ -193,6 +193,123 @@ export function renderPrimitive(node: NodeInstance): React.ReactNode {
           {p.glyph ?? '★'}
         </div>
       )
+    case 'toggle': {
+      const on = Boolean(node.props.checked)
+      const onColor = (p.onColor as string) || '#2563eb'
+      return (
+        <div style={{ ...css, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+          <span>{p.label ?? ''}</span>
+          <span style={{ position: 'relative', width: 40, height: 24, borderRadius: 12, background: on ? onColor : '#cbd5e1', flex: '0 0 auto' }}>
+            <span style={{ position: 'absolute', top: 2, left: on ? 18 : 2, width: 20, height: 20, borderRadius: '50%', background: '#fff', boxShadow: '0 1px 2px rgba(0,0,0,0.3)' }} />
+          </span>
+        </div>
+      )
+    }
+    case 'toast': {
+      const variant = (p.variant as string) || 'info'
+      const colors: Record<string, string> = { info: '#334155', success: '#16a34a', warning: '#d97706', error: '#dc2626' }
+      const icons: Record<string, string> = { info: 'ℹ️', success: '✅', warning: '⚠️', error: '⛔' }
+      return (
+        <div style={{ ...css, display: 'flex', alignItems: 'center', gap: 8, padding: '0 12px', background: css.background ?? colors[variant], color: css.color ?? '#fff', borderRadius: css.borderRadius ?? 8, boxShadow: '0 4px 12px rgba(0,0,0,0.2)' }}>
+          <span>{icons[variant]}</span>
+          <span style={{ flex: 1 }}>{p.message ?? ''}</span>
+          {p.action ? <span style={{ fontWeight: 700, color: '#93c5fd' }}>{p.action}</span> : null}
+        </div>
+      )
+    }
+    case 'badge': {
+      const dot = Boolean(node.props.dot)
+      return (
+        <div style={{ ...css, display: 'flex', alignItems: 'center', justifyContent: 'center', background: css.background ?? '#dc2626', color: css.color ?? '#fff', borderRadius: 999, fontSize: css.fontSize ?? 12, fontWeight: 700 }}>
+          {dot ? '' : (p.text ?? '')}
+        </div>
+      )
+    }
+    case 'avatar': {
+      const shape = (p.shape as string) || 'circle'
+      const radius = shape === 'circle' ? '50%' : (css.borderRadius ?? 8)
+      return p.src ? (
+        <img src={p.src} alt="" style={{ ...css, objectFit: 'cover', borderRadius: radius }} />
+      ) : (
+        <div style={{ ...css, borderRadius: radius, background: css.background ?? '#94a3b8', color: css.color ?? '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 600 }}>
+          {p.initials ?? ''}
+        </div>
+      )
+    }
+    case 'chip':
+      return (
+        <div style={{ ...css, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, background: css.background ?? '#e2e8f0', color: css.color ?? '#0f172a', borderRadius: css.borderRadius ?? 999, padding: '0 10px', fontSize: css.fontSize ?? 13 }}>
+          <span>{p.text ?? ''}</span>
+          {Boolean(node.props.removable) && <span style={{ opacity: 0.6 }}>×</span>}
+        </div>
+      )
+    case 'fab':
+      return (
+        <div style={{ ...css, borderRadius: '50%', background: css.background ?? '#2563eb', color: css.color ?? '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: css.fontSize ?? 24, boxShadow: '0 4px 12px rgba(0,0,0,0.3)' }}>
+          {p.glyph ?? '＋'}
+        </div>
+      )
+    case 'searchbar':
+      return (
+        <div style={{ ...css, display: 'flex', alignItems: 'center', gap: 8, background: css.background ?? '#f1f5f9', borderRadius: css.borderRadius ?? 999, padding: '0 12px', color: '#64748b' }}>
+          🔍 <span>{p.placeholder ?? ''}</span>
+        </div>
+      )
+    case 'slider': {
+      const min = Number(p.min ?? 0)
+      const max = Number(p.max ?? 100)
+      const pct = max > min ? Math.max(0, Math.min(100, ((Number(p.value ?? 0) - min) / (max - min)) * 100)) : 0
+      return (
+        <div style={{ ...css, display: 'flex', alignItems: 'center' }}>
+          <div style={{ position: 'relative', width: '100%', height: 4, background: '#cbd5e1', borderRadius: 2 }}>
+            <div style={{ position: 'absolute', left: 0, top: 0, height: 4, width: `${pct}%`, background: css.background ?? '#2563eb', borderRadius: 2 }} />
+            <div style={{ position: 'absolute', left: `${pct}%`, top: -6, marginLeft: -8, width: 16, height: 16, borderRadius: '50%', background: '#fff', border: '2px solid #2563eb' }} />
+          </div>
+        </div>
+      )
+    }
+    case 'progress': {
+      const pct = Math.max(0, Math.min(100, Number(p.value ?? 0)))
+      return (
+        <div style={{ ...css, background: css.background ?? '#e2e8f0', borderRadius: css.borderRadius ?? 999, overflow: 'hidden' }}>
+          <div style={{ height: '100%', width: `${pct}%`, background: '#2563eb' }} />
+        </div>
+      )
+    }
+    case 'stepper':
+      return (
+        <div style={{ ...css, display: 'flex', alignItems: 'center', border: '1px solid #cbd5e1', borderRadius: css.borderRadius ?? 8, overflow: 'hidden' }}>
+          <span style={{ width: 32, textAlign: 'center', borderRight: '1px solid #e2e8f0' }}>−</span>
+          <span style={{ flex: 1, textAlign: 'center' }}>{p.value ?? 0}</span>
+          <span style={{ width: 32, textAlign: 'center', borderLeft: '1px solid #e2e8f0' }}>＋</span>
+        </div>
+      )
+    case 'rating': {
+      const val = Number(p.value ?? 0)
+      const max = Number(p.max ?? 5)
+      return (
+        <div style={{ ...css, display: 'flex', alignItems: 'center', gap: 2, fontSize: css.fontSize ?? 18, color: css.color ?? '#f59e0b' }}>
+          {Array.from({ length: max }).map((_, i) => (
+            <span key={i}>{i < val ? '★' : '☆'}</span>
+          ))}
+        </div>
+      )
+    }
+    case 'bottomnav': {
+      const items = String(p.items ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+      const icons = String(p.icons ?? '').split(',').map((s) => s.trim())
+      const active = Number(p.active ?? 0)
+      return (
+        <div style={{ ...css, display: 'flex', alignItems: 'center', background: css.background ?? '#ffffff', borderTop: '1px solid #e2e8f0' }}>
+          {items.map((it, i) => (
+            <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, fontSize: 11, color: i === active ? (css.color ?? '#2563eb') : '#94a3b8' }}>
+              <span style={{ fontSize: 18 }}>{icons[i] || '•'}</span>
+              {it}
+            </div>
+          ))}
+        </div>
+      )
+    }
     case 'row':
     case 'column':
     case 'container':
