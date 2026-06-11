@@ -1009,6 +1009,17 @@ textarea {
   color: var(--accent);
 }
 
+/* ---- autosave toggle ---- */
+.autosave-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
 /* ---- error banner ---- */
 .error-banner {
   display: flex;

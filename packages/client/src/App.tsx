@@ -3,6 +3,7 @@ import { selectActiveBoard, useEditor } from './state/editorStore'
 import { useAuth } from './state/authStore'
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
 import { useCollaboration } from './hooks/useCollaboration'
+import { useAutosave } from './hooks/useAutosave'
 import { useI18n } from './i18n/I18nContext'
 import { AuthScreen } from './panels/AuthScreen'
 import { ComponentEditor } from './panels/ComponentEditor'
@@ -28,6 +29,7 @@ export function App() {
 
   useKeyboardShortcuts()
   useCollaboration()
+  useAutosave()
 
   const activeTab = useEditor((s) => s.activeTab)
   const activeBoard = useEditor(selectActiveBoard)

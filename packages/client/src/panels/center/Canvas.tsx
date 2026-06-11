@@ -1,4 +1,4 @@
-import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { memo, useCallback, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { isContainerType, isSpecEmpty, type ElementSpec, type Layout, type NodeInstance } from '@uiux/shared'
 import { selectRoot, selectSurface, useEditor } from '../../state/editorStore'
@@ -19,6 +19,13 @@ export interface DragPayload {
   kind: 'primitive' | 'component'
   type?: string
   componentId?: string
+}
+
+/** Stable interaction handlers shared with every node (kept off the render path). */
+interface NodeHandlers {
+  onItemPointerDown: (e: ReactPointerEvent, node: NodeInstance) => void
+  onResizePointerDown: (e: ReactPointerEvent, node: NodeInstance, handle: string) => void
+  onDropInto: (e: React.DragEvent, parentId: string) => void
 }
 
 /** Live, read-only render of a linked custom-component instance, scaled to fit. */
@@ -48,80 +55,143 @@ function CustomInstanceView({ node }: { node: NodeInstance }) {
   )
 }
 
+const HANDLES = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'] as const
+
+/**
+ * One placed node. Memoized on its `node` reference and the (stable) handler
+ * bag, and it self-subscribes to its own selection state. So moving/resizing a
+ * node only re-renders that node and its ancestors (the immutable-update path),
+ * not the whole tree — which keeps large screens responsive during drags.
+ */
+const NodeView = memo(function NodeView({ node, handlers }: { node: NodeInstance; handlers: NodeHandlers }) {
+  const { t } = useI18n()
+  const selected = useEditor((s) => s.selection.includes(node.id))
+  const showHandles = useEditor((s) => s.selection.length === 1 && s.selection[0] === node.id)
+  const isCustom = node.type.startsWith('custom:')
+  const container = !isCustom && isContainerType(node.type)
+  return (
+    <div
+      className={`canvas-item${selected ? ' selected' : ''}${isCustom ? ' custom' : ''}`}
+      style={{ left: node.layout.x, top: node.layout.y, width: node.layout.w, height: node.layout.h }}
+      onPointerDown={(e) => handlers.onItemPointerDown(e, node)}
+      onDragOver={container ? (e) => e.preventDefault() : undefined}
+      onDrop={container ? (e) => handlers.onDropInto(e, node.id) : undefined}
+    >
+      {isCustom ? (
+        <CustomInstanceView node={node} />
+      ) : (
+        <div className="canvas-item-inner">{renderPrimitive(node)}</div>
+      )}
+      {!isSpecEmpty(node.props.spec as ElementSpec | undefined) && (
+        <div className="spec-badge" title={t.hasDevSpec}>
+          📄
+        </div>
+      )}
+      {!isCustom && node.children.map((c) => <NodeView key={c.id} node={c} handlers={handlers} />)}
+      {showHandles &&
+        HANDLES.map((h) => (
+          <div
+            key={h}
+            className={`resize-handle handle-${h}`}
+            onPointerDown={(e) => handlers.onResizePointerDown(e, node, h)}
+          />
+        ))}
+    </div>
+  )
+})
+
 type Interaction =
   | { mode: 'idle' }
   | { mode: 'move'; startX: number; startY: number; origin: Record<string, Layout>; singleId?: string }
   | { mode: 'resize'; id: string; handle: string; startX: number; startY: number; origin: Layout }
   | { mode: 'marquee'; startX: number; startY: number; x: number; y: number }
 
-const HANDLES = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'] as const
-
 export function Canvas() {
-  const { t } = useI18n()
   const root = useEditor(selectRoot)
   const surface = useEditor(useShallow(selectSurface))
-  const selection = useEditor((s) => s.selection)
   const zoom = useEditor((s) => s.zoom)
-  const setSelection = useEditor((s) => s.setSelection)
-  const toggleSelection = useEditor((s) => s.toggleSelection)
-  const updateLayout = useEditor((s) => s.updateLayout)
-  const insertPrimitive = useEditor((s) => s.insertPrimitive)
-  const insertComponentInstance = useEditor((s) => s.insertComponentInstance)
-  const reparent = useEditor((s) => s.reparent)
-  const checkpoint = useEditor((s) => s.checkpoint)
   const remoteCursors = useEditor((s) => s.remoteCursors)
 
   const frameRef = useRef<HTMLDivElement>(null)
+  const zoomRef = useRef(zoom)
+  zoomRef.current = zoom
   const lastCursorSent = useRef(0)
-  const [it, setIt] = useState<Interaction>({ mode: 'idle' })
+  const itRef = useRef<Interaction>({ mode: 'idle' })
+  const [marquee, setMarquee] = useState<{ left: number; top: number; width: number; height: number } | null>(null)
+
+  /** Client point → canvas-space (root frame) coordinates. Stable. */
+  const toCanvas = useCallback((clientX: number, clientY: number) => {
+    const rect = frameRef.current!.getBoundingClientRect()
+    return { x: (clientX - rect.left) / zoomRef.current, y: (clientY - rect.top) / zoomRef.current }
+  }, [])
+
+  const onItemPointerDown = useCallback(
+    (e: ReactPointerEvent, node: NodeInstance) => {
+      e.stopPropagation()
+      const st = useEditor.getState()
+      let sel = st.selection
+      if (e.shiftKey) {
+        st.toggleSelection(node.id)
+        sel = sel.includes(node.id) ? sel.filter((x) => x !== node.id) : [...sel, node.id]
+      } else if (!sel.includes(node.id)) {
+        st.setSelection([node.id])
+        sel = [node.id]
+      }
+      const { x, y } = toCanvas(e.clientX, e.clientY)
+      const origin: Record<string, Layout> = {}
+      const collect = (n: NodeInstance) => {
+        if (sel.includes(n.id)) origin[n.id] = { ...n.layout }
+        n.children.forEach(collect)
+      }
+      st.getRoot()?.children.forEach(collect)
+      st.checkpoint()
+      itRef.current = { mode: 'move', startX: x, startY: y, origin, singleId: sel.length === 1 ? node.id : undefined }
+      ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
+    },
+    [toCanvas]
+  )
+
+  const onResizePointerDown = useCallback(
+    (e: ReactPointerEvent, node: NodeInstance, handle: string) => {
+      e.stopPropagation()
+      const st = useEditor.getState()
+      st.setSelection([node.id])
+      const { x, y } = toCanvas(e.clientX, e.clientY)
+      st.checkpoint()
+      itRef.current = { mode: 'resize', id: node.id, handle, startX: x, startY: y, origin: { ...node.layout } }
+      ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
+    },
+    [toCanvas]
+  )
+
+  const onDropInto = useCallback((e: React.DragEvent, parentId: string) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const raw = e.dataTransfer.getData('application/uiux')
+    if (!raw) return
+    const payload = JSON.parse(raw) as DragPayload
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+    const x = Math.round((e.clientX - rect.left) / zoomRef.current)
+    const y = Math.round((e.clientY - rect.top) / zoomRef.current)
+    const st = useEditor.getState()
+    if (payload.kind === 'primitive' && payload.type) st.insertPrimitive(payload.type, { x, y }, parentId)
+    else if (payload.kind === 'component' && payload.componentId) st.insertComponentInstance(payload.componentId, { x, y }, parentId)
+  }, [])
+
+  const handlers = useMemo<NodeHandlers>(
+    () => ({ onItemPointerDown, onResizePointerDown, onDropInto }),
+    [onItemPointerDown, onResizePointerDown, onDropInto]
+  )
 
   if (!root || !surface) return null
   const { width, height } = surface
 
-  /** Convert a client point to canvas-space (root frame) coordinates. */
-  const toCanvas = (clientX: number, clientY: number) => {
-    const rect = frameRef.current!.getBoundingClientRect()
-    return { x: (clientX - rect.left) / zoom, y: (clientY - rect.top) / zoom }
-  }
-
-  const onItemPointerDown = (e: ReactPointerEvent, node: NodeInstance) => {
-    e.stopPropagation()
-    let sel = selection
-    if (e.shiftKey) {
-      toggleSelection(node.id)
-      sel = selection.includes(node.id)
-        ? selection.filter((x) => x !== node.id)
-        : [...selection, node.id]
-    } else if (!selection.includes(node.id)) {
-      setSelection([node.id])
-      sel = [node.id]
-    }
-    const { x, y } = toCanvas(e.clientX, e.clientY)
-    const origin: Record<string, Layout> = {}
-    const collect = (n: NodeInstance) => {
-      if (sel.includes(n.id)) origin[n.id] = { ...n.layout }
-      n.children.forEach(collect)
-    }
-    root.children.forEach(collect)
-    checkpoint()
-    setIt({ mode: 'move', startX: x, startY: y, origin, singleId: sel.length === 1 ? node.id : undefined })
-    ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
-  }
-
-  const onResizePointerDown = (e: ReactPointerEvent, node: NodeInstance, handle: string) => {
-    e.stopPropagation()
-    setSelection([node.id])
-    const { x, y } = toCanvas(e.clientX, e.clientY)
-    checkpoint()
-    setIt({ mode: 'resize', id: node.id, handle, startX: x, startY: y, origin: { ...node.layout } })
-    ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
-  }
-
   const onCanvasPointerDown = (e: ReactPointerEvent) => {
     if (e.target !== frameRef.current) return
-    setSelection([])
+    useEditor.getState().setSelection([])
     const { x, y } = toCanvas(e.clientX, e.clientY)
-    setIt({ mode: 'marquee', startX: x, startY: y, x, y })
+    itRef.current = { mode: 'marquee', startX: x, startY: y, x, y }
+    setMarquee({ left: x, top: y, width: 0, height: 0 })
   }
 
   const onPointerMove = (e: ReactPointerEvent) => {
@@ -132,15 +202,16 @@ export function Canvas() {
       const c = toCanvas(e.clientX, e.clientY)
       sendCursor(Math.round(c.x), Math.round(c.y))
     }
+    const it = itRef.current
     if (it.mode === 'idle') return
     const { x, y } = toCanvas(e.clientX, e.clientY)
+    const st = useEditor.getState()
     if (it.mode === 'move') {
-      // Relative-layout delta equals canvas delta at any nesting depth.
       const dx = x - it.startX
       const dy = y - it.startY
       for (const id of Object.keys(it.origin)) {
         const o = it.origin[id]
-        updateLayout(id, { x: Math.round(o.x + dx), y: Math.round(o.y + dy) })
+        st.updateLayout(id, { x: Math.round(o.x + dx), y: Math.round(o.y + dy) })
       }
     } else if (it.mode === 'resize') {
       const dx = x - it.startX
@@ -157,102 +228,42 @@ export function Canvas() {
         nh = Math.max(8, o.h - dy)
         ny = o.y + (o.h - nh)
       }
-      updateLayout(it.id, { x: Math.round(nx), y: Math.round(ny), w: Math.round(nw), h: Math.round(nh) })
+      st.updateLayout(it.id, { x: Math.round(nx), y: Math.round(ny), w: Math.round(nw), h: Math.round(nh) })
     } else if (it.mode === 'marquee') {
-      setIt({ ...it, x, y })
+      itRef.current = { ...it, x, y }
+      setMarquee({
+        left: Math.min(it.startX, x),
+        top: Math.min(it.startY, y),
+        width: Math.abs(x - it.startX),
+        height: Math.abs(y - it.startY)
+      })
     }
   }
 
   const onPointerUp = () => {
+    const it = itRef.current
+    const st = useEditor.getState()
     if (it.mode === 'marquee') {
       const x1 = Math.min(it.startX, it.x)
       const y1 = Math.min(it.startY, it.y)
       const x2 = Math.max(it.startX, it.x)
       const y2 = Math.max(it.startY, it.y)
-      const hit = root.children
-        .filter(
-          (c) =>
-            c.layout.x < x2 &&
-            c.layout.x + c.layout.w > x1 &&
-            c.layout.y < y2 &&
-            c.layout.y + c.layout.h > y1
-        )
+      const cur = st.getRoot()
+      const hit = (cur?.children ?? [])
+        .filter((c) => c.layout.x < x2 && c.layout.x + c.layout.w > x1 && c.layout.y < y2 && c.layout.y + c.layout.h > y1)
         .map((c) => c.id)
-      setSelection(hit)
+      st.setSelection(hit)
+      setMarquee(null)
     } else if (it.mode === 'move' && it.singleId) {
       // Re-parent into the container the node now sits over (by its center).
-      const cur = useEditor.getState().getRoot()
+      const cur = st.getRoot()
       if (cur) {
         const origin = absoluteOrigin(cur, it.singleId)
         const node = it.origin[it.singleId]
-        if (origin && node) {
-          reparent(it.singleId, { x: origin.x + node.w / 2, y: origin.y + node.h / 2 })
-        }
+        if (origin && node) st.reparent(it.singleId, { x: origin.x + node.w / 2, y: origin.y + node.h / 2 })
       }
     }
-    setIt({ mode: 'idle' })
-  }
-
-  const onDropInto = (e: React.DragEvent, parentId: string) => {
-    e.preventDefault()
-    e.stopPropagation()
-    const raw = e.dataTransfer.getData('application/uiux')
-    if (!raw) return
-    const payload = JSON.parse(raw) as DragPayload
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-    const x = Math.round((e.clientX - rect.left) / zoom)
-    const y = Math.round((e.clientY - rect.top) / zoom)
-    if (payload.kind === 'primitive' && payload.type) {
-      insertPrimitive(payload.type, { x, y }, parentId)
-    } else if (payload.kind === 'component' && payload.componentId) {
-      insertComponentInstance(payload.componentId, { x, y }, parentId)
-    }
-  }
-
-  const marquee =
-    it.mode === 'marquee'
-      ? {
-          left: Math.min(it.startX, it.x),
-          top: Math.min(it.startY, it.y),
-          width: Math.abs(it.x - it.startX),
-          height: Math.abs(it.y - it.startY)
-        }
-      : null
-
-  const renderNode = (node: NodeInstance): React.ReactNode => {
-    const selected = selection.includes(node.id)
-    const isCustom = node.type.startsWith('custom:')
-    const container = !isCustom && isContainerType(node.type)
-    return (
-      <div
-        key={node.id}
-        className={`canvas-item${selected ? ' selected' : ''}${isCustom ? ' custom' : ''}`}
-        style={{ left: node.layout.x, top: node.layout.y, width: node.layout.w, height: node.layout.h }}
-        onPointerDown={(e) => onItemPointerDown(e, node)}
-        onDragOver={container ? (e) => e.preventDefault() : undefined}
-        onDrop={container ? (e) => onDropInto(e, node.id) : undefined}
-      >
-        {isCustom ? (
-          <CustomInstanceView node={node} />
-        ) : (
-          <div className="canvas-item-inner">{renderPrimitive(node)}</div>
-        )}
-        {!isSpecEmpty(node.props.spec as ElementSpec | undefined) && (
-          <div className="spec-badge" title={t.hasDevSpec}>
-            📄
-          </div>
-        )}
-        {!isCustom && node.children.map(renderNode)}
-        {selected && selection.length === 1 &&
-          HANDLES.map((h) => (
-            <div
-              key={h}
-              className={`resize-handle handle-${h}`}
-              onPointerDown={(e) => onResizePointerDown(e, node, h)}
-            />
-          ))}
-      </div>
-    )
+    itRef.current = { mode: 'idle' }
   }
 
   return (
@@ -267,7 +278,9 @@ export function Canvas() {
         onDragOver={(e) => e.preventDefault()}
         onDrop={(e) => onDropInto(e, 'root')}
       >
-        {root.children.map(renderNode)}
+        {root.children.map((c) => (
+          <NodeView key={c.id} node={c} handlers={handlers} />
+        ))}
         {marquee && (
           <div
             className="marquee"

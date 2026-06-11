@@ -60,6 +60,8 @@ export function BoardView({ board }: { board: Board }) {
   const openScreen = useEditor((s) => s.openScreen)
   const saveActive = useEditor((s) => s.saveActive)
   const renameDoc = useEditor((s) => s.renameDoc)
+  const autosave = useEditor((s) => s.autosave)
+  const toggleAutosave = useEditor((s) => s.toggleAutosave)
   const boardRef = useRef<HTMLDivElement>(null)
   const [drag, setDrag] = useState<Drag>({ mode: 'none' })
   const [ctx, setCtx] = useState<Ctx | null>(null)
@@ -166,10 +168,15 @@ export function BoardView({ board }: { board: Board }) {
         <span className="divider-v" />
         <button onClick={() => setAddOpen(true)}>＋ {t.addScreenToBoard}</button>
         <span className="spacer" />
+        <label className="autosave-toggle" title={t.autosaveHint}>
+          <input type="checkbox" checked={autosave} onChange={toggleAutosave} /> {t.autosave}
+        </label>
         <button className="primary" onClick={() => void saveActive()} disabled={saving}>
           {saving ? '…' : t.save}
         </button>
-        <span className={`dirty-dot ${dirty ? 'on' : 'off'}`}>{dirty ? t.unsaved : t.saved}</span>
+        <span className={`dirty-dot ${dirty ? 'on' : 'off'}`}>
+          {saving ? t.saving : dirty ? (autosave ? t.autosavePending : t.unsaved) : t.saved}
+        </span>
       </div>
 
       {addOpen && <AddScreenModal boardId={board.id} onClose={() => setAddOpen(false)} />}

@@ -19,6 +19,8 @@ export function DeviceToolbar() {
   const dirty = useEditor((s) => (activeTab ? Boolean(s.dirty[activeTab.id]) : false))
   const saveActive = useEditor((s) => s.saveActive)
   const renameDoc = useEditor((s) => s.renameDoc)
+  const autosave = useEditor((s) => s.autosave)
+  const toggleAutosave = useEditor((s) => s.toggleAutosave)
 
   if (!screen || !surface) return null
 
@@ -68,10 +70,15 @@ export function DeviceToolbar() {
       <span className="spacer" />
       <button onClick={() => downloadScreenHtml(screen, components)}>{t.exportHtml}</button>
       <button onClick={() => downloadScreenSpecSheet(screen, components)}>{t.specSheet}</button>
+      <label className="autosave-toggle" title={t.autosaveHint}>
+        <input type="checkbox" checked={autosave} onChange={toggleAutosave} /> {t.autosave}
+      </label>
       <button className="primary" onClick={() => void saveActive()} disabled={saving}>
         {saving ? '…' : t.save}
       </button>
-      <span className={`dirty-dot ${dirty ? 'on' : 'off'}`}>{dirty ? t.unsaved : t.saved}</span>
+      <span className={`dirty-dot ${dirty ? 'on' : 'off'}`}>
+        {saving ? t.saving : dirty ? (autosave ? t.autosavePending : t.unsaved) : t.saved}
+      </span>
     </div>
   )
 }

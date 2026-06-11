@@ -162,6 +162,10 @@ interface EditorState {
 
   // --- persistence ---
   saveActive: () => Promise<void>
+  saveAll: () => Promise<void>
+  markClean: (id: string) => void
+  autosave: boolean
+  toggleAutosave: () => void
 
   // --- internal surface helpers ---
   getRoot: () => NodeInstance | null
@@ -208,6 +212,37 @@ export function selectActiveScreenId(s: EditorState): string | null {
 
 const sameTab = (a: Tab | null, b: Tab) => !!a && a.kind === b.kind && a.id === b.id
 
+/**
+ * Persist a single screen or board by id and mark it clean on success. Shared
+ * by saveActive, saveAll and autosave. Throws on failure so callers can report.
+ */
+async function saveOne(get: () => EditorState, id: string): Promise<void> {
+  const s = get()
+  if (!s.projectId) return
+  const sc = s.screens[id]
+  const board = s.boards[id]
+  if (sc) {
+    await api.saveScreen(s.projectId, sc.id, {
+      name: sc.name,
+      device: sc.device,
+      canvas: sc.canvas,
+      root: sc.root,
+      notes: sc.notes
+    })
+  } else if (board) {
+    await api.saveBoard(s.projectId, board.id, {
+      name: board.name,
+      notes: board.notes,
+      items: board.items,
+      connectors: board.connectors,
+      elements: board.elements ?? []
+    })
+  } else {
+    return
+  }
+  get().markClean(id)
+}
+
 export const useEditor = create<EditorState>((set, get) => ({
   projectId: null,
   projectName: '',
@@ -231,8 +266,11 @@ export const useEditor = create<EditorState>((set, get) => ({
   collaborators: [],
   remoteCursors: {},
   error: null,
+  autosave: true,
 
   setError: (key) => set({ error: key }),
+  toggleAutosave: () => set((s) => ({ autosave: !s.autosave })),
+  markClean: (id) => set((s) => ({ dirty: { ...s.dirty, [id]: false } })),
 
   // --- surface helpers ---
   getRoot: () => selectRoot(get()),
@@ -933,40 +971,36 @@ export const useEditor = create<EditorState>((set, get) => ({
 
   // --- persistence ---
   saveActive: async () => {
-    const { projectId, activeTab } = get()
-    if (!projectId || !activeTab) return
+    const { activeTab } = get()
+    if (!activeTab) return
     set({ saving: true })
     try {
-      if (activeTab.kind === 'screen') {
-        const sc = get().screens[activeTab.id]
-        if (sc) {
-          await api.saveScreen(projectId, sc.id, {
-            name: sc.name,
-            device: sc.device,
-            canvas: sc.canvas,
-            root: sc.root,
-            notes: sc.notes
-          })
-        }
-      } else {
-        const board = get().boards[activeTab.id]
-        if (board) {
-          await api.saveBoard(projectId, board.id, {
-            name: board.name,
-            notes: board.notes,
-            items: board.items,
-            connectors: board.connectors,
-            elements: board.elements ?? []
-          })
-        }
-      }
-      // Only mark clean once the server confirms the write.
-      set((s) => ({ dirty: { ...s.dirty, [activeTab.id]: false } }))
+      await saveOne(get, activeTab.id)
     } catch {
       get().setError('errSave')
     } finally {
       set({ saving: false })
     }
+  },
+
+  // Persist every document with unsaved changes (used by autosave + on demand).
+  saveAll: async () => {
+    const ids = Object.keys(get().dirty).filter((id) => get().dirty[id])
+    if (!ids.length) return
+    set({ saving: true })
+    let failed = false
+    try {
+      for (const id of ids) {
+        try {
+          await saveOne(get, id)
+        } catch {
+          failed = true
+        }
+      }
+    } finally {
+      set({ saving: false })
+    }
+    if (failed) get().setError('errSave')
   },
 
   // --- collaboration ---
