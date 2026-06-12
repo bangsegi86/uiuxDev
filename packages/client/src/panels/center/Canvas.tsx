@@ -3,7 +3,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { isContainerType, isSpecEmpty, type ElementSpec, type Layout, type NodeInstance } from '@uiux/shared'
 import { selectRoot, selectSurface, useEditor } from '../../state/editorStore'
 import { useI18n } from '../../i18n/I18nContext'
-import { absoluteOrigin } from '../../state/tree'
+import { absoluteOrigin, findNode } from '../../state/tree'
 import { sendCursor } from '../../lib/collabBus'
 import { renderPrimitive, renderStaticTree } from '../../componentRegistry'
 
@@ -12,6 +12,21 @@ function userColor(id: string): string {
   let h = 0
   for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) % 360
   return `hsl(${h}, 70%, 45%)`
+}
+
+/** Bounding box (canvas coords) enclosing a set of placed items. */
+function boundingBoxOf(items: { abs: { x: number; y: number }; layout: { w: number; h: number } }[]) {
+  let minX = Infinity
+  let minY = Infinity
+  let maxX = -Infinity
+  let maxY = -Infinity
+  for (const it of items) {
+    minX = Math.min(minX, it.abs.x)
+    minY = Math.min(minY, it.abs.y)
+    maxX = Math.max(maxX, it.abs.x + it.layout.w)
+    maxY = Math.max(maxY, it.abs.y + it.layout.h)
+  }
+  return { x: minX, y: minY, w: maxX - minX, h: maxY - minY }
 }
 
 /** Drag payload format shared with the palette / component list. */
@@ -100,16 +115,30 @@ const NodeView = memo(function NodeView({ node, handlers }: { node: NodeInstance
   )
 })
 
+interface Box {
+  x: number
+  y: number
+  w: number
+  h: number
+}
+interface GroupOrigin {
+  id: string
+  abs: { x: number; y: number }
+  layout: Layout
+}
+
 type Interaction =
   | { mode: 'idle' }
   | { mode: 'move'; startX: number; startY: number; origin: Record<string, Layout>; singleId?: string }
   | { mode: 'resize'; id: string; handle: string; startX: number; startY: number; origin: Layout }
+  | { mode: 'groupResize'; handle: string; startX: number; startY: number; box: Box; origins: GroupOrigin[] }
   | { mode: 'marquee'; startX: number; startY: number; x: number; y: number }
 
 export function Canvas() {
   const root = useEditor(selectRoot)
   const surface = useEditor(useShallow(selectSurface))
   const zoom = useEditor((s) => s.zoom)
+  const selection = useEditor((s) => s.selection)
   const remoteCursors = useEditor((s) => s.remoteCursors)
 
   const frameRef = useRef<HTMLDivElement>(null)
@@ -164,6 +193,28 @@ export function Canvas() {
     [toCanvas]
   )
 
+  const onGroupResizePointerDown = useCallback(
+    (e: ReactPointerEvent, handle: string) => {
+      e.stopPropagation()
+      const st = useEditor.getState()
+      const cur = st.getRoot()
+      if (!cur) return
+      const origins: GroupOrigin[] = []
+      for (const id of st.selection) {
+        const abs = absoluteOrigin(cur, id)
+        const f = findNode(cur, id)
+        if (abs && f) origins.push({ id, abs, layout: { ...f.node.layout } })
+      }
+      if (origins.length < 2) return
+      const box = boundingBoxOf(origins)
+      const { x, y } = toCanvas(e.clientX, e.clientY)
+      st.checkpoint()
+      itRef.current = { mode: 'groupResize', handle, startX: x, startY: y, box, origins }
+      ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
+    },
+    [toCanvas]
+  )
+
   const onDropInto = useCallback((e: React.DragEvent, parentId: string) => {
     e.preventDefault()
     e.stopPropagation()
@@ -182,6 +233,18 @@ export function Canvas() {
     () => ({ onItemPointerDown, onResizePointerDown, onDropInto }),
     [onItemPointerDown, onResizePointerDown, onDropInto]
   )
+
+  // Bounding box around a multi-selection (drives the group-resize frame).
+  const groupBox = useMemo<Box | null>(() => {
+    if (selection.length < 2 || !root) return null
+    const items: { abs: { x: number; y: number }; layout: { w: number; h: number } }[] = []
+    for (const id of selection) {
+      const abs = absoluteOrigin(root, id)
+      const f = findNode(root, id)
+      if (abs && f) items.push({ abs, layout: f.node.layout })
+    }
+    return items.length >= 2 ? boundingBoxOf(items) : null
+  }, [selection, root])
 
   if (!root || !surface) return null
   const { width, height } = surface
@@ -229,6 +292,37 @@ export function Canvas() {
         ny = o.y + (o.h - nh)
       }
       st.updateLayout(it.id, { x: Math.round(nx), y: Math.round(ny), w: Math.round(nw), h: Math.round(nh) })
+    } else if (it.mode === 'groupResize') {
+      const dx = x - it.startX
+      const dy = y - it.startY
+      const b = it.box
+      // New bounding box, anchored at the edge/corner opposite the handle.
+      let nx = b.x
+      let ny = b.y
+      let nw = b.w
+      let nh = b.h
+      if (it.handle.includes('e')) nw = Math.max(8, b.w + dx)
+      if (it.handle.includes('s')) nh = Math.max(8, b.h + dy)
+      if (it.handle.includes('w')) {
+        nw = Math.max(8, b.w - dx)
+        nx = b.x + (b.w - nw)
+      }
+      if (it.handle.includes('n')) {
+        nh = Math.max(8, b.h - dy)
+        ny = b.y + (b.h - nh)
+      }
+      const sx = b.w > 0 ? nw / b.w : 1
+      const sy = b.h > 0 ? nh / b.h : 1
+      for (const o of it.origins) {
+        const newAbsX = nx + (o.abs.x - b.x) * sx
+        const newAbsY = ny + (o.abs.y - b.y) * sy
+        st.updateLayout(o.id, {
+          x: Math.round(o.layout.x + (newAbsX - o.abs.x)),
+          y: Math.round(o.layout.y + (newAbsY - o.abs.y)),
+          w: Math.max(8, Math.round(o.layout.w * sx)),
+          h: Math.max(8, Math.round(o.layout.h * sy))
+        })
+      }
     } else if (it.mode === 'marquee') {
       itRef.current = { ...it, x, y }
       setMarquee({
@@ -281,6 +375,20 @@ export function Canvas() {
         {root.children.map((c) => (
           <NodeView key={c.id} node={c} handlers={handlers} />
         ))}
+        {groupBox && (
+          <div
+            className="group-frame"
+            style={{ left: groupBox.x, top: groupBox.y, width: groupBox.w, height: groupBox.h }}
+          >
+            {HANDLES.map((h) => (
+              <div
+                key={h}
+                className={`resize-handle handle-${h}`}
+                onPointerDown={(e) => onGroupResizePointerDown(e, h)}
+              />
+            ))}
+          </div>
+        )}
         {marquee && (
           <div
             className="marquee"

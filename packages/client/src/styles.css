@@ -371,6 +371,15 @@ textarea:focus {
 .handle-s { left: calc(50% - 4px); bottom: -4px; cursor: ns-resize; }
 .handle-sw { left: -4px; bottom: -4px; cursor: nesw-resize; }
 .handle-w { left: -4px; top: calc(50% - 4px); cursor: ew-resize; }
+.group-frame {
+  position: absolute;
+  outline: 1.5px dashed var(--accent);
+  pointer-events: none;
+  z-index: 5;
+}
+.group-frame .resize-handle {
+  pointer-events: auto;
+}
 .marquee {
   position: absolute;
   background: rgba(37, 99, 235, 0.1);
