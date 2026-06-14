@@ -1,4 +1,4 @@
-import { memo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { memo, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import type { Board, BoardElement, BoardItem, Screen } from '@uiux/shared'
 import { useEditor } from '../../state/editorStore'
 import { dialog } from '../../state/dialogStore'
@@ -24,9 +24,12 @@ const ScreenPreview = memo(function ScreenPreview({ screen, scale }: { screen: S
 })
 
 const SCALE = 0.26
+const MIN_ZOOM = 0.2
+const MAX_ZOOM = 4
 
 type Drag =
   | { mode: 'none' }
+  | { mode: 'pan'; startX: number; startY: number; px: number; py: number }
   | { mode: 'item'; screenId: string; offX: number; offY: number }
   | { mode: 'element'; id: string; offX: number; offY: number }
   | { mode: 'elementResize'; id: string; startX: number; startY: number; startW: number; startH: number }
@@ -44,7 +47,8 @@ function itemBox(item: BoardItem, screen: Screen | undefined) {
   return { x: item.x, y: item.y, w, h }
 }
 
-/** The flow board: screens placed as thumbnails, linked by connectors. */
+/** The flow board: screens placed as thumbnails, linked by connectors. Pan by
+ *  dragging an empty area; zoom with Ctrl + mouse wheel. */
 export function BoardView({ board }: { board: Board }) {
   const { t } = useI18n()
   const projectId = useEditor((s) => s.projectId)
@@ -67,16 +71,48 @@ export function BoardView({ board }: { board: Board }) {
   const [drag, setDrag] = useState<Drag>({ mode: 'none' })
   const [ctx, setCtx] = useState<Ctx | null>(null)
   const [addOpen, setAddOpen] = useState(false)
+  const [zoom, setZoom] = useState(1)
+  const [pan, setPan] = useState({ x: 40, y: 40 })
+  const zoomRef = useRef(zoom)
+  zoomRef.current = zoom
+  const panRef = useRef(pan)
+  panRef.current = pan
+
+  // Ctrl + wheel zoom, centred on the cursor. Native listener so we can
+  // preventDefault (React's onWheel is passive and cannot).
+  useEffect(() => {
+    const el = boardRef.current
+    if (!el) return
+    const onWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey) return
+      e.preventDefault()
+      const rect = el.getBoundingClientRect()
+      const z = zoomRef.current
+      const p = panRef.current
+      const nz = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z * (e.deltaY < 0 ? 1.12 : 1 / 1.12)))
+      const bx = (e.clientX - rect.left - p.x) / z
+      const by = (e.clientY - rect.top - p.y) / z
+      setPan({ x: e.clientX - rect.left - bx * nz, y: e.clientY - rect.top - by * nz })
+      setZoom(nz)
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [])
 
   const onRenameBoard = async () => {
     const name = await dialog.prompt(t.rename, board.name)
     if (name && name.trim()) void renameDoc({ kind: 'board', id: board.id }, name)
   }
 
+  /** Client point → board-content coordinates (accounting for pan + zoom). */
   const toBoard = (clientX: number, clientY: number) => {
-    const el = boardRef.current!
-    const rect = el.getBoundingClientRect()
-    return { x: clientX - rect.left + el.scrollLeft, y: clientY - rect.top + el.scrollTop }
+    const rect = boardRef.current!.getBoundingClientRect()
+    return { x: (clientX - rect.left - pan.x) / zoom, y: (clientY - rect.top - pan.y) / zoom }
+  }
+  /** Client point → viewport-relative pixels (for overlays like the menu). */
+  const toScreen = (clientX: number, clientY: number) => {
+    const rect = boardRef.current!.getBoundingClientRect()
+    return { x: clientX - rect.left, y: clientY - rect.top }
   }
 
   const center = (item: BoardItem) => {
@@ -84,8 +120,16 @@ export function BoardView({ board }: { board: Board }) {
     return { x: b.x + b.w / 2, y: b.y + b.h / 2 }
   }
 
+  const onBoardPointerDown = (e: ReactPointerEvent) => {
+    setCtx(null)
+    if ((e.target as HTMLElement).closest('.board-frame, .board-el, .board-connector, .board-context')) return
+    setDrag({ mode: 'pan', startX: e.clientX, startY: e.clientY, px: pan.x, py: pan.y })
+    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+  }
+
   const onItemDown = (e: ReactPointerEvent, item: BoardItem) => {
     if ((e.target as HTMLElement).closest('.board-connect-handle')) return
+    e.stopPropagation()
     const p = toBoard(e.clientX, e.clientY)
     setDrag({ mode: 'item', screenId: item.screenId, offX: p.x - item.x, offY: p.y - item.y })
     ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
@@ -99,6 +143,10 @@ export function BoardView({ board }: { board: Board }) {
 
   const onMove = (e: ReactPointerEvent) => {
     if (drag.mode === 'none') return
+    if (drag.mode === 'pan') {
+      setPan({ x: drag.px + (e.clientX - drag.startX), y: drag.py + (e.clientY - drag.startY) })
+      return
+    }
     const p = toBoard(e.clientX, e.clientY)
     if (drag.mode === 'item') {
       moveBoardItem(board.id, drag.screenId, Math.round(p.x - drag.offX), Math.round(p.y - drag.offY))
@@ -160,6 +208,11 @@ export function BoardView({ board }: { board: Board }) {
     setDrag({ mode: 'none' })
   }
 
+  const resetView = () => {
+    setZoom(1)
+    setPan({ x: 40, y: 40 })
+  }
+
   return (
     <>
       <div className="toolbar">
@@ -168,6 +221,17 @@ export function BoardView({ board }: { board: Board }) {
         </strong>
         <span className="divider-v" />
         <button onClick={() => setAddOpen(true)}>＋ {t.addScreenToBoard}</button>
+        <span className="divider-v" />
+        <button onClick={() => setZoom((z) => Math.max(MIN_ZOOM, z / 1.2))} title={t.zoomOut}>
+          －
+        </button>
+        <button className="zoom-value" onClick={resetView} title={t.resetView}>
+          {Math.round(zoom * 100)}%
+        </button>
+        <button onClick={() => setZoom((z) => Math.min(MAX_ZOOM, z * 1.2))} title={t.zoomIn}>
+          ＋
+        </button>
+        <span className="board-zoom-hint">{t.boardZoomHint}</span>
         <span className="spacer" />
         <label className="autosave-toggle" title={t.autosaveHint}>
           <input type="checkbox" checked={autosave} onChange={toggleAutosave} /> {t.autosave}
@@ -182,13 +246,16 @@ export function BoardView({ board }: { board: Board }) {
 
       {addOpen && <AddScreenModal boardId={board.id} onClose={() => setAddOpen(false)} />}
 
-      <div className="board-scroll">
+      <div
+        ref={boardRef}
+        className={`board${drag.mode === 'pan' ? ' panning' : ''}`}
+        onPointerMove={onMove}
+        onPointerUp={onUp}
+        onPointerDown={onBoardPointerDown}
+      >
         <div
-          ref={boardRef}
-          className="board"
-          onPointerMove={onMove}
-          onPointerUp={onUp}
-          onPointerDown={() => setCtx(null)}
+          className="board-content"
+          style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, transformOrigin: '0 0' }}
         >
           <svg className="board-svg">
             <defs>
@@ -250,30 +317,24 @@ export function BoardView({ board }: { board: Board }) {
                 onPointerDown={(e) => onItemDown(e, item)}
                 onContextMenu={(e) => {
                   e.preventDefault()
-                  const p = toBoard(e.clientX, e.clientY)
+                  const p = toScreen(e.clientX, e.clientY)
                   setCtx({ x: p.x, y: p.y, screenId: item.screenId })
                 }}
               >
-                <div className="board-frame-head">
+                <div className="board-frame-label">
                   <span className="frame-tab-device">{screen?.device === 'pc' ? '🖥' : '📱'}</span>
                   <span className="board-frame-name">{screen?.name ?? '…'}</span>
-                  <button className="board-connect-handle" title={t.connect} onPointerDown={(e) => onConnectDown(e, item)}>
-                    →
-                  </button>
-                  <button
-                    className="board-frame-x"
-                    title={t.removeFromBoard}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      removeScreenFromBoard(board.id, item.screenId)
-                    }}
-                  >
-                    ×
-                  </button>
                 </div>
                 <div className="board-frame-canvas" style={{ width: b.w, height: b.h }}>
                   {screen && <ScreenPreview screen={screen} scale={SCALE} />}
                 </div>
+                <button
+                  className="board-connect-handle"
+                  title={t.connect}
+                  onPointerDown={(e) => onConnectDown(e, item)}
+                >
+                  →
+                </button>
               </div>
             )
           })}
@@ -352,12 +413,7 @@ export function BoardView({ board }: { board: Board }) {
                 ) : (
                   <label className="board-el-imgempty">
                     🖼 {t.uploadImage}
-                    <input
-                      type="file"
-                      accept="image/*"
-                      hidden
-                      onChange={(e) => onPickImage(el.id, e.target.files?.[0])}
-                    />
+                    <input type="file" accept="image/*" hidden onChange={(e) => onPickImage(el.id, e.target.files?.[0])} />
                   </label>
                 )
               ) : (
@@ -372,28 +428,28 @@ export function BoardView({ board }: { board: Board }) {
               <div className="board-el-resize" onPointerDown={(e) => onElementResizeDown(e, el)} />
             </div>
           ))}
-
-          {ctx && (
-            <div className="board-context" style={{ left: ctx.x, top: ctx.y }} onPointerDown={(e) => e.stopPropagation()}>
-              <button
-                onClick={() => {
-                  void openScreen(ctx.screenId)
-                  setCtx(null)
-                }}
-              >
-                {t.openInEditor}
-              </button>
-              <button
-                onClick={() => {
-                  removeScreenFromBoard(board.id, ctx.screenId)
-                  setCtx(null)
-                }}
-              >
-                {t.removeFromBoard}
-              </button>
-            </div>
-          )}
         </div>
+
+        {ctx && (
+          <div className="board-context" style={{ left: ctx.x, top: ctx.y }} onPointerDown={(e) => e.stopPropagation()}>
+            <button
+              onClick={() => {
+                void openScreen(ctx.screenId)
+                setCtx(null)
+              }}
+            >
+              {t.openInEditor}
+            </button>
+            <button
+              onClick={() => {
+                removeScreenFromBoard(board.id, ctx.screenId)
+                setCtx(null)
+              }}
+            >
+              {t.removeFromBoard}
+            </button>
+          </div>
+        )}
       </div>
     </>
   )
