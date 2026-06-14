@@ -1,9 +1,50 @@
-import { getPrimitive, type PropField } from '@uiux/shared'
+import { useEffect, useState } from 'react'
+import { getPrimitive, type NodeInstance, type PropField } from '@uiux/shared'
 import { selectRoot, useEditor } from '../../state/editorStore'
 import { findNode } from '../../state/tree'
+import { rgbToHex, stripPx } from '../../lib/color'
 import { useI18n } from '../../i18n/I18nContext'
+import { ColorField } from './ColorField'
 import { GridEditor } from './GridEditor'
 import { SpecEditor } from './SpecEditor'
+
+/**
+ * Read the *effective* (currently rendered) style of the selected node from the
+ * live DOM, so the panel can show the real applied value — e.g. the inherited
+ * font size or a renderer's default colour — even when the property isn't
+ * explicitly set on the node.
+ */
+function useEffectiveStyles(node: NodeInstance | undefined): Record<string, string> {
+  const [eff, setEff] = useState<Record<string, string>>({})
+  const id = node?.id
+  const styleKey = JSON.stringify(node?.style ?? {})
+  const propKey = JSON.stringify(node?.props ?? {})
+  useEffect(() => {
+    if (!id) return
+    const host = document.querySelector(`[data-node-id="${id}"]`)
+    const styled =
+      (host?.querySelector('.canvas-item-inner')?.firstElementChild as HTMLElement | null) ??
+      (host as HTMLElement | null)
+    if (!styled) {
+      setEff({})
+      return
+    }
+    const cs = getComputedStyle(styled)
+    setEff({
+      fontSize: stripPx(cs.fontSize),
+      fontWeight: cs.fontWeight === '700' ? 'bold' : cs.fontWeight === '400' ? 'normal' : cs.fontWeight,
+      textAlign: cs.textAlign === 'start' ? 'left' : cs.textAlign === 'end' ? 'right' : cs.textAlign,
+      borderRadius: stripPx(cs.borderTopLeftRadius),
+      borderWidth: stripPx(cs.borderTopWidth),
+      padding: stripPx(cs.paddingTop),
+      color: rgbToHex(cs.color),
+      background: rgbToHex(cs.backgroundColor),
+      borderColor: rgbToHex(cs.borderTopColor)
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, styleKey, propKey])
+  return eff
+}
 
 export function PropertyPanel() {
   const { t } = useI18n()
@@ -15,6 +56,9 @@ export function PropertyPanel() {
   const updateLayout = useEditor((s) => s.updateLayout)
   const detachComponentInstance = useEditor((s) => s.detachComponentInstance)
   const checkpoint = useEditor((s) => s.checkpoint)
+
+  const node = root && selection.length === 1 ? findNode(root, selection[0])?.node : undefined
+  const eff = useEffectiveStyles(node)
 
   if (!root || selection.length === 0) {
     return (
@@ -37,7 +81,6 @@ export function PropertyPanel() {
     )
   }
 
-  const node = findNode(root, selection[0])?.node
   if (!node) return <aside className="panel right-panel" />
 
   // Linked custom-component instance: show its source + detach action.
@@ -77,6 +120,8 @@ export function PropertyPanel() {
   const renderField = (f: PropField) => {
     const current =
       f.target === 'props' ? (node.props[f.key] as string | boolean | undefined) : node.style[f.key]
+    // Effective (currently-applied) value to surface when nothing is set yet.
+    const effective = f.target === 'style' ? eff[f.key] ?? '' : ''
     const onChange = (value: string | boolean) => {
       if (f.target === 'props') updateProp(node.id, f.key, value)
       else updateStyle(node.id, f.key, String(value))
@@ -87,15 +132,12 @@ export function PropertyPanel() {
         {f.kind === 'textarea' ? (
           <textarea value={(current as string) ?? ''} onChange={(e) => onChange(e.target.value)} />
         ) : f.kind === 'color' ? (
-          <input
-            type="color"
-            value={(current as string) || '#000000'}
-            onChange={(e) => onChange(e.target.value)}
-          />
+          <ColorField value={((current as string) || effective) ?? ''} onChange={onChange} />
         ) : f.kind === 'number' ? (
           <input
             type="number"
             value={(current as string) ?? ''}
+            placeholder={effective}
             onChange={(e) => onChange(e.target.value)}
           />
         ) : f.kind === 'boolean' ? (
@@ -105,7 +147,7 @@ export function PropertyPanel() {
             onChange={(e) => onChange(e.target.checked)}
           />
         ) : f.kind === 'select' ? (
-          <select value={(current as string) ?? ''} onChange={(e) => onChange(e.target.value)}>
+          <select value={((current as string) || effective) ?? ''} onChange={(e) => onChange(e.target.value)}>
             <option value="">—</option>
             {f.options?.map((o) => (
               <option key={o.value} value={o.value}>
@@ -117,6 +159,7 @@ export function PropertyPanel() {
           <input
             type="text"
             value={(current as string) ?? ''}
+            placeholder={effective}
             onChange={(e) => onChange(e.target.value)}
           />
         )}

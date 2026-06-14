@@ -86,6 +86,7 @@ const NodeView = memo(function NodeView({ node, handlers }: { node: NodeInstance
   const container = !isCustom && isContainerType(node.type)
   return (
     <div
+      data-node-id={node.id}
       className={`canvas-item${selected ? ' selected' : ''}${isCustom ? ' custom' : ''}`}
       style={{ left: node.layout.x, top: node.layout.y, width: node.layout.w, height: node.layout.h }}
       onPointerDown={(e) => handlers.onItemPointerDown(e, node)}
