@@ -39,6 +39,17 @@ export function useKeyboardShortcuts() {
         }
       } else if (e.key === 'Escape') {
         s.setSelection([])
+      } else if (e.key.startsWith('Arrow')) {
+        // Nudge the selected component(s) instead of scrolling the page.
+        if (!s.selection.length) return
+        const step = e.shiftKey ? 10 : 1
+        const dx = e.key === 'ArrowLeft' ? -step : e.key === 'ArrowRight' ? step : 0
+        const dy = e.key === 'ArrowUp' ? -step : e.key === 'ArrowDown' ? step : 0
+        if (dx || dy) {
+          if (!e.repeat) s.checkpoint() // one undo step per key-press burst
+          s.nudgeSelection(dx, dy)
+          e.preventDefault()
+        }
       }
     }
     window.addEventListener('keydown', onKey)

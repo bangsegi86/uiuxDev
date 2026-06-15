@@ -1,9 +1,39 @@
+import { useEffect, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { selectSurface, useEditor } from '../../state/editorStore'
 import { dialog } from '../../state/dialogStore'
 import { useI18n } from '../../i18n/I18nContext'
 import { downloadScreenHtml } from '../../lib/htmlExport'
 import { downloadScreenSpecSheet } from '../../lib/specSheet'
+
+/**
+ * Number input that lets you type freely and only commits (and clamps) on blur
+ * or Enter — so a min-size clamp doesn't fight you mid-typing (e.g. clearing the
+ * field to type "200" no longer snaps to the minimum after the first digit).
+ */
+function SizeBox({ value, title, onCommit }: { value: number; title: string; onCommit: (n: number) => void }) {
+  const [draft, setDraft] = useState(String(value))
+  useEffect(() => setDraft(String(value)), [value])
+  const commit = () => {
+    const n = parseInt(draft, 10)
+    if (Number.isFinite(n)) onCommit(n)
+    else setDraft(String(value))
+  }
+  return (
+    <input
+      className="size-input"
+      type="number"
+      title={title}
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+        else if (e.key === 'Escape') setDraft(String(value))
+      }}
+    />
+  )
+}
 
 export function DeviceToolbar() {
   const { t } = useI18n()
@@ -13,7 +43,6 @@ export function DeviceToolbar() {
   const components = useEditor((s) => s.components)
   const setDevice = useEditor((s) => s.setDevice)
   const setCanvasSize = useEditor((s) => s.setCanvasSize)
-  const checkpoint = useEditor((s) => s.checkpoint)
   const zoom = useEditor((s) => s.zoom)
   const setZoom = useEditor((s) => s.setZoom)
   const saving = useEditor((s) => s.saving)
@@ -49,23 +78,9 @@ export function DeviceToolbar() {
       </div>
       <span className="divider-v" />
       <span className="label">{t.size}</span>
-      <input
-        className="size-input"
-        type="number"
-        title={t.width}
-        value={screen.canvas.width}
-        onFocus={checkpoint}
-        onChange={(e) => setCanvasSize(Number(e.target.value), screen.canvas.height)}
-      />
+      <SizeBox value={screen.canvas.width} title={t.width} onCommit={(w) => setCanvasSize(w, screen.canvas.height)} />
       <span className="size-x">×</span>
-      <input
-        className="size-input"
-        type="number"
-        title={t.height}
-        value={screen.canvas.height}
-        onFocus={checkpoint}
-        onChange={(e) => setCanvasSize(screen.canvas.width, Number(e.target.value))}
-      />
+      <SizeBox value={screen.canvas.height} title={t.height} onCommit={(h) => setCanvasSize(screen.canvas.width, h)} />
       <span className="divider-v" />
       <div className="segmented">
         <button className={ui.ruler ? 'active' : ''} onClick={() => toggleUi('ruler')} title={t.ruler}>

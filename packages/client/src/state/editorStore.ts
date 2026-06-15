@@ -145,6 +145,7 @@ interface EditorState {
   paste: () => void
   duplicate: () => void
   remove: () => void
+  nudgeSelection: (dx: number, dy: number) => void
   align: (kind: AlignKind) => void
   distribute: (kind: DistributeKind) => void
 
@@ -879,6 +880,20 @@ export const useEditor = create<EditorState>((set, get) => ({
     get().checkpoint()
     get().setRoot(removeNodes(root, new Set(selection)))
     set({ selection: [] })
+  },
+
+  nudgeSelection: (dx, dy) => {
+    const root = get().getRoot()
+    const { selection } = get()
+    if (!root || !selection.length) return
+    let next = root
+    for (const id of selection) {
+      next = updateNode(next, id, (n) => ({
+        ...n,
+        layout: { ...n.layout, x: Math.round(n.layout.x + dx), y: Math.round(n.layout.y + dy) }
+      }))
+    }
+    get().setRoot(next)
   },
 
   align: (kind) => {
