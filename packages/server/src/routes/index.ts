@@ -7,6 +7,7 @@ import {
   DEVICE_FRAMES,
   emptyRoot,
   projectCreateSchema,
+  projectUpdateSchema,
   routes,
   screenSaveSchema,
   templateSaveSchema,
@@ -108,6 +109,19 @@ export async function registerRoutes(app: FastifyInstance, storage: StorageAdapt
       if (!project) return reply.code(404).send({ error: 'project not found' })
       const tree = await storage.listTree(project.id)
       return { project, tree }
+    }
+  )
+
+  app.put<{ Params: { projectId: string } }>(
+    '/api/projects/:projectId',
+    async (req, reply) => {
+      const body = projectUpdateSchema.parse(req.body)
+      const updated = await storage.updateProject(req.params.projectId, {
+        ...(body as Partial<Project>),
+        updatedAt: now()
+      })
+      if (!updated) return reply.code(404).send({ error: 'project not found' })
+      return updated
     }
   )
 

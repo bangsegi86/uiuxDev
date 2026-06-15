@@ -48,18 +48,42 @@ export class KnexAdapter implements StorageAdapter {
 
   // --- projects ---
   async listProjects(): Promise<Project[]> {
-    return this.db<Project>('projects').select('*').orderBy('createdAt')
+    const rows = await this.db('projects').select('*').orderBy('createdAt')
+    return rows.map((r) => this.rowToProject(r))
   }
   async getProject(id: string): Promise<Project | null> {
-    return (await this.db<Project>('projects').where({ id }).first()) ?? null
+    const row = await this.db('projects').where({ id }).first()
+    return row ? this.rowToProject(row) : null
   }
   async createProject(p: Project): Promise<Project> {
-    await this.db('projects').insert(p)
+    await this.db('projects').insert({
+      id: p.id,
+      name: p.name,
+      ownerId: p.ownerId ?? null,
+      guides: p.guides ? JSON.stringify(p.guides) : null,
+      createdAt: p.createdAt,
+      updatedAt: p.updatedAt
+    })
     return p
   }
   async updateProject(id: string, patch: Partial<Project>): Promise<Project | null> {
-    await this.db('projects').where({ id }).update(patch)
+    const row: Record<string, unknown> = {}
+    if (patch.name !== undefined) row.name = patch.name
+    if (patch.ownerId !== undefined) row.ownerId = patch.ownerId ?? null
+    if (patch.guides !== undefined) row.guides = patch.guides ? JSON.stringify(patch.guides) : null
+    if (patch.updatedAt !== undefined) row.updatedAt = patch.updatedAt
+    if (Object.keys(row).length) await this.db('projects').where({ id }).update(row)
     return this.getProject(id)
+  }
+  private rowToProject(row: Record<string, unknown>): Project {
+    return {
+      id: row.id as string,
+      name: row.name as string,
+      ownerId: (row.ownerId as string) ?? undefined,
+      guides: row.guides ? this.parse(row.guides as string) : undefined,
+      createdAt: row.createdAt as string,
+      updatedAt: row.updatedAt as string
+    }
   }
   async deleteProject(id: string): Promise<void> {
     await this.db('templates').where({ projectId: id }).del()
@@ -126,7 +150,6 @@ export class KnexAdapter implements StorageAdapter {
     if (patch.canvas !== undefined) row.canvas = JSON.stringify(next.canvas)
     if (patch.root !== undefined) row.root = JSON.stringify(next.root)
     if (patch.notes !== undefined) row.notes = next.notes
-    if (patch.guides !== undefined) row.guides = JSON.stringify(next.guides)
     row.updatedAt = next.updatedAt
     await this.db('screens').where({ id }).update(row)
     return next
@@ -143,7 +166,6 @@ export class KnexAdapter implements StorageAdapter {
       canvas: JSON.stringify(s.canvas),
       root: JSON.stringify(s.root),
       notes: s.notes,
-      guides: s.guides ? JSON.stringify(s.guides) : null,
       createdAt: s.createdAt,
       updatedAt: s.updatedAt
     }
@@ -156,7 +178,6 @@ export class KnexAdapter implements StorageAdapter {
       canvas: this.parse(row.canvas),
       root: this.parse(row.root),
       notes: (row.notes as string) ?? '',
-      guides: row.guides ? this.parse(row.guides as string) : undefined,
       createdAt: row.createdAt as string,
       updatedAt: row.updatedAt as string
     }

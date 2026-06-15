@@ -148,12 +148,14 @@ interface EditorState {
   align: (kind: AlignKind) => void
   distribute: (kind: DistributeKind) => void
 
-  // --- editor view prefs + guides ---
+  // --- editor view prefs + guides (project-wide, split by device) ---
   ui: { ruler: boolean; grid: boolean; guides: boolean }
+  projectGuides: { pc: GuideSet; mobile: GuideSet } | null
   toggleUi: (key: 'ruler' | 'grid' | 'guides') => void
   addGuide: (axis: 'x' | 'y', pos: number) => void
   moveGuide: (axis: 'x' | 'y', index: number, pos: number) => void
   removeGuide: (axis: 'x' | 'y', index: number) => void
+  saveGuides: () => Promise<void>
 
   // --- device / notes / zoom ---
   setDevice: (device: DeviceKind) => void
@@ -221,10 +223,11 @@ export function selectActiveScreenId(s: EditorState): string | null {
 /** Shared stable empty guide set (avoids new-object selector loops in v5). */
 const EMPTY_GUIDES: GuideSet = { x: [], y: [] }
 
-/** Ruler guides for the active screen's current device. */
+/** Project-wide ruler guides for the active screen's current device. */
 export function selectGuides(s: EditorState): GuideSet {
   const sc = activeScreen(s)
-  return sc?.guides?.[sc.device] ?? EMPTY_GUIDES
+  if (!sc || !s.projectGuides) return EMPTY_GUIDES
+  return s.projectGuides[sc.device] ?? EMPTY_GUIDES
 }
 
 const UI_KEY = 'uiux.editorUi'
@@ -254,8 +257,7 @@ async function saveOne(get: () => EditorState, id: string): Promise<void> {
       device: sc.device,
       canvas: sc.canvas,
       root: sc.root,
-      notes: sc.notes,
-      guides: sc.guides
+      notes: sc.notes
     })
   } else if (board) {
     await api.saveBoard(s.projectId, board.id, {
@@ -271,7 +273,14 @@ async function saveOne(get: () => EditorState, id: string): Promise<void> {
   get().markClean(id)
 }
 
-/** Update the active screen's guides for its current device, marking it dirty. */
+/** Debounced project-guides save (guides persist independently of screens). */
+let guidesTimer: ReturnType<typeof setTimeout> | undefined
+function scheduleGuidesSave(get: () => EditorState): void {
+  clearTimeout(guidesTimer)
+  guidesTimer = setTimeout(() => void get().saveGuides(), 700)
+}
+
+/** Update the project's shared guides for the active screen's device. */
 function writeGuides(
   get: () => EditorState,
   set: (partial: Partial<EditorState>) => void,
@@ -281,9 +290,9 @@ function writeGuides(
   const sc = activeScreen(s)
   if (!sc) return
   const empty: GuideSet = { x: [], y: [] }
-  const base = { pc: sc.guides?.pc ?? empty, mobile: sc.guides?.mobile ?? empty }
-  const guides = { ...base, [sc.device]: fn(base[sc.device]) }
-  set({ screens: { ...s.screens, [sc.id]: { ...sc, guides } }, dirty: { ...s.dirty, [sc.id]: true } })
+  const base = s.projectGuides ?? { pc: empty, mobile: empty }
+  set({ projectGuides: { ...base, [sc.device]: fn(base[sc.device]) } })
+  scheduleGuidesSave(get)
 }
 
 export const useEditor = create<EditorState>((set, get) => ({
@@ -311,6 +320,7 @@ export const useEditor = create<EditorState>((set, get) => ({
   error: null,
   autosave: true,
   ui: loadUi(),
+  projectGuides: null,
 
   setError: (key) => set({ error: key }),
   toggleAutosave: () => set((s) => ({ autosave: !s.autosave })),
@@ -358,7 +368,8 @@ export const useEditor = create<EditorState>((set, get) => ({
       dirty: {},
       componentDraft: null,
       draftRoot: null,
-      selection: []
+      selection: [],
+      projectGuides: project.guides ?? { pc: { x: [], y: [] }, mobile: { x: [], y: [] } }
     })
   },
 
@@ -975,6 +986,15 @@ export const useEditor = create<EditorState>((set, get) => ({
     writeGuides(get, set, (g) => ({ ...g, [axis]: g[axis].map((v, i) => (i === index ? Math.round(pos) : v)) })),
   removeGuide: (axis, index) =>
     writeGuides(get, set, (g) => ({ ...g, [axis]: g[axis].filter((_, i) => i !== index) })),
+  saveGuides: async () => {
+    const { projectId, projectGuides } = get()
+    if (!projectId || !projectGuides) return
+    try {
+      await api.saveProjectGuides(projectId, projectGuides)
+    } catch {
+      get().setError('errSave')
+    }
+  },
 
   setNotes: (notes) => {
     const s = get()

@@ -79,7 +79,12 @@ export const screenSaveSchema = z.object({
   device: deviceKindSchema.optional(),
   canvas: z.object({ width: z.number(), height: z.number() }).optional(),
   root: nodeInstanceSchema.optional(),
-  notes: z.string().optional(),
+  notes: z.string().optional()
+})
+
+/** Update project-level settings (name, shared guides). */
+export const projectUpdateSchema = z.object({
+  name: z.string().min(1).max(200).optional(),
   guides: z.object({ pc: guideSetSchema, mobile: guideSetSchema }).optional()
 })
 
@@ -110,6 +115,7 @@ export type ProjectCreateInput = z.infer<typeof projectCreateSchema>
 export type TreeNodeCreateInput = z.infer<typeof treeNodeCreateSchema>
 export type TreeNodeUpdateInput = z.infer<typeof treeNodeUpdateSchema>
 export type ScreenSaveInput = z.infer<typeof screenSaveSchema>
+export type ProjectUpdateInput = z.infer<typeof projectUpdateSchema>
 export type BoardSaveInput = z.infer<typeof boardSaveSchema>
 export type CustomComponentSaveInput = z.infer<typeof customComponentSaveSchema>
 export type TemplateSaveInput = z.infer<typeof templateSaveSchema>

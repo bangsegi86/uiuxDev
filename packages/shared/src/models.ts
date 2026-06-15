@@ -81,6 +81,8 @@ export interface Project {
   name: string
   /** Owner user id. Optional for legacy data created before auth. */
   ownerId?: string
+  /** Ruler guides shared across the project's screens, split by device. */
+  guides?: { pc: GuideSet; mobile: GuideSet }
   createdAt: string
   updatedAt: string
 }
@@ -117,8 +119,6 @@ export interface Screen {
   root: NodeInstance
   /** Free-form design reference notes shown in the collapsible bottom panel. */
   notes: string
-  /** Ruler guides, kept separately for PC and mobile layouts. */
-  guides?: { pc: GuideSet; mobile: GuideSet }
   createdAt: string
   updatedAt: string
 }

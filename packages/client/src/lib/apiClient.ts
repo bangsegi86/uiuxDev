@@ -50,6 +50,8 @@ export const api = {
   listProjects: () => http<Project[]>('GET', routes.projects),
   createProject: (name: string) => http<Project>('POST', routes.projects, { name }),
   getProject: (id: string) => http<{ project: Project; tree: TreeNode[] }>('GET', routes.project(id)),
+  saveProjectGuides: (id: string, guides: Project['guides']) =>
+    http<Project>('PUT', routes.project(id), { guides }),
   deleteProject: (id: string) => http<void>('DELETE', routes.project(id)),
 
   listTree: (projectId: string) => http<TreeNode[]>('GET', routes.tree(projectId)),

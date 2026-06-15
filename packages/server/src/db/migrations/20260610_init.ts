@@ -9,6 +9,8 @@ export async function up(knex: Knex): Promise<void> {
   await knex.schema.createTable('projects', (t) => {
     t.string('id', 64).primary()
     t.string('name', 200).notNullable()
+    t.string('ownerId', 64).nullable()
+    t.text('guides').nullable()
     t.string('createdAt', 40).notNullable()
     t.string('updatedAt', 40).notNullable()
   })
@@ -31,7 +33,6 @@ export async function up(knex: Knex): Promise<void> {
     t.text('canvas').notNullable()
     t.text('root').notNullable()
     t.text('notes').nullable()
-    t.text('guides').nullable()
     t.string('createdAt', 40).notNullable()
     t.string('updatedAt', 40).notNullable()
   })
