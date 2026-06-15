@@ -81,7 +81,7 @@ const HANDLES = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'] as const
 const NodeView = memo(function NodeView({ node, handlers }: { node: NodeInstance; handlers: NodeHandlers }) {
   const { t } = useI18n()
   const selected = useEditor((s) => s.selection.includes(node.id))
-  const showHandles = useEditor((s) => s.selection.length === 1 && s.selection[0] === node.id)
+  const showHandles = useEditor((s) => s.selection.includes(node.id))
   const isCustom = node.type.startsWith('custom:')
   const container = !isCustom && isContainerType(node.type)
   return (
@@ -139,7 +139,6 @@ export function Canvas() {
   const root = useEditor(selectRoot)
   const surface = useEditor(useShallow(selectSurface))
   const zoom = useEditor((s) => s.zoom)
-  const selection = useEditor((s) => s.selection)
   const remoteCursors = useEditor((s) => s.remoteCursors)
 
   const frameRef = useRef<HTMLDivElement>(null)
@@ -185,32 +184,29 @@ export function Canvas() {
     (e: ReactPointerEvent, node: NodeInstance, handle: string) => {
       e.stopPropagation()
       const st = useEditor.getState()
-      st.setSelection([node.id])
-      const { x, y } = toCanvas(e.clientX, e.clientY)
-      st.checkpoint()
-      itRef.current = { mode: 'resize', id: node.id, handle, startX: x, startY: y, origin: { ...node.layout } }
-      ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
-    },
-    [toCanvas]
-  )
-
-  const onGroupResizePointerDown = useCallback(
-    (e: ReactPointerEvent, handle: string) => {
-      e.stopPropagation()
-      const st = useEditor.getState()
       const cur = st.getRoot()
       if (!cur) return
-      const origins: GroupOrigin[] = []
-      for (const id of st.selection) {
-        const abs = absoluteOrigin(cur, id)
-        const f = findNode(cur, id)
-        if (abs && f) origins.push({ id, abs, layout: { ...f.node.layout } })
-      }
-      if (origins.length < 2) return
-      const box = boundingBoxOf(origins)
       const { x, y } = toCanvas(e.clientX, e.clientY)
+      const sel = st.selection
+      // When several nodes are selected, a handle on any of them resizes the
+      // whole selection together (proportionally); otherwise just this node.
+      if (sel.length > 1 && sel.includes(node.id)) {
+        const origins: GroupOrigin[] = []
+        for (const id of sel) {
+          const abs = absoluteOrigin(cur, id)
+          const f = findNode(cur, id)
+          if (abs && f) origins.push({ id, abs, layout: { ...f.node.layout } })
+        }
+        if (origins.length >= 2) {
+          st.checkpoint()
+          itRef.current = { mode: 'groupResize', handle, startX: x, startY: y, box: boundingBoxOf(origins), origins }
+          ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
+          return
+        }
+      }
+      st.setSelection([node.id])
       st.checkpoint()
-      itRef.current = { mode: 'groupResize', handle, startX: x, startY: y, box, origins }
+      itRef.current = { mode: 'resize', id: node.id, handle, startX: x, startY: y, origin: { ...node.layout } }
       ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
     },
     [toCanvas]
@@ -234,18 +230,6 @@ export function Canvas() {
     () => ({ onItemPointerDown, onResizePointerDown, onDropInto }),
     [onItemPointerDown, onResizePointerDown, onDropInto]
   )
-
-  // Bounding box around a multi-selection (drives the group-resize frame).
-  const groupBox = useMemo<Box | null>(() => {
-    if (selection.length < 2 || !root) return null
-    const items: { abs: { x: number; y: number }; layout: { w: number; h: number } }[] = []
-    for (const id of selection) {
-      const abs = absoluteOrigin(root, id)
-      const f = findNode(root, id)
-      if (abs && f) items.push({ abs, layout: f.node.layout })
-    }
-    return items.length >= 2 ? boundingBoxOf(items) : null
-  }, [selection, root])
 
   if (!root || !surface) return null
   const { width, height } = surface
@@ -376,20 +360,6 @@ export function Canvas() {
         {root.children.map((c) => (
           <NodeView key={c.id} node={c} handlers={handlers} />
         ))}
-        {groupBox && (
-          <div
-            className="group-frame"
-            style={{ left: groupBox.x, top: groupBox.y, width: groupBox.w, height: groupBox.h }}
-          >
-            {HANDLES.map((h) => (
-              <div
-                key={h}
-                className={`resize-handle handle-${h}`}
-                onPointerDown={(e) => onGroupResizePointerDown(e, h)}
-              />
-            ))}
-          </div>
-        )}
         {marquee && (
           <div
             className="marquee"
