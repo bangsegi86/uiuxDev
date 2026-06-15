@@ -102,6 +102,12 @@ export interface TreeNode {
   boardId?: string
 }
 
+/** Ruler guide lines: x = vertical guides (at x positions), y = horizontal. */
+export interface GuideSet {
+  x: number[]
+  y: number[]
+}
+
 /** A single screen design (one canvas). Each screen is its own file. */
 export interface Screen {
   id: string
@@ -111,6 +117,8 @@ export interface Screen {
   root: NodeInstance
   /** Free-form design reference notes shown in the collapsible bottom panel. */
   notes: string
+  /** Ruler guides, kept separately for PC and mobile layouts. */
+  guides?: { pc: GuideSet; mobile: GuideSet }
   createdAt: string
   updatedAt: string
 }

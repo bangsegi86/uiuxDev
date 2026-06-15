@@ -10,6 +10,7 @@ import {
   type Connector,
   type CustomComponent,
   type DeviceKind,
+  type GuideSet,
   type Layout,
   type NodeInstance,
   type Project,
@@ -147,6 +148,13 @@ interface EditorState {
   align: (kind: AlignKind) => void
   distribute: (kind: DistributeKind) => void
 
+  // --- editor view prefs + guides ---
+  ui: { ruler: boolean; grid: boolean; guides: boolean }
+  toggleUi: (key: 'ruler' | 'grid' | 'guides') => void
+  addGuide: (axis: 'x' | 'y', pos: number) => void
+  moveGuide: (axis: 'x' | 'y', index: number, pos: number) => void
+  removeGuide: (axis: 'x' | 'y', index: number) => void
+
   // --- device / notes / zoom ---
   setDevice: (device: DeviceKind) => void
   setCanvasSize: (width: number, height: number) => void
@@ -210,6 +218,25 @@ export function selectActiveScreenId(s: EditorState): string | null {
   return activeScreen(s)?.id ?? null
 }
 
+/** Shared stable empty guide set (avoids new-object selector loops in v5). */
+const EMPTY_GUIDES: GuideSet = { x: [], y: [] }
+
+/** Ruler guides for the active screen's current device. */
+export function selectGuides(s: EditorState): GuideSet {
+  const sc = activeScreen(s)
+  return sc?.guides?.[sc.device] ?? EMPTY_GUIDES
+}
+
+const UI_KEY = 'uiux.editorUi'
+function loadUi(): { ruler: boolean; grid: boolean; guides: boolean } {
+  const fallback = { ruler: false, grid: false, guides: true }
+  try {
+    return { ...fallback, ...JSON.parse(localStorage.getItem(UI_KEY) ?? '{}') }
+  } catch {
+    return fallback
+  }
+}
+
 const sameTab = (a: Tab | null, b: Tab) => !!a && a.kind === b.kind && a.id === b.id
 
 /**
@@ -227,7 +254,8 @@ async function saveOne(get: () => EditorState, id: string): Promise<void> {
       device: sc.device,
       canvas: sc.canvas,
       root: sc.root,
-      notes: sc.notes
+      notes: sc.notes,
+      guides: sc.guides
     })
   } else if (board) {
     await api.saveBoard(s.projectId, board.id, {
@@ -241,6 +269,21 @@ async function saveOne(get: () => EditorState, id: string): Promise<void> {
     return
   }
   get().markClean(id)
+}
+
+/** Update the active screen's guides for its current device, marking it dirty. */
+function writeGuides(
+  get: () => EditorState,
+  set: (partial: Partial<EditorState>) => void,
+  fn: (g: GuideSet) => GuideSet
+): void {
+  const s = get()
+  const sc = activeScreen(s)
+  if (!sc) return
+  const empty: GuideSet = { x: [], y: [] }
+  const base = { pc: sc.guides?.pc ?? empty, mobile: sc.guides?.mobile ?? empty }
+  const guides = { ...base, [sc.device]: fn(base[sc.device]) }
+  set({ screens: { ...s.screens, [sc.id]: { ...sc, guides } }, dirty: { ...s.dirty, [sc.id]: true } })
 }
 
 export const useEditor = create<EditorState>((set, get) => ({
@@ -267,6 +310,7 @@ export const useEditor = create<EditorState>((set, get) => ({
   remoteCursors: {},
   error: null,
   autosave: true,
+  ui: loadUi(),
 
   setError: (key) => set({ error: key }),
   toggleAutosave: () => set((s) => ({ autosave: !s.autosave })),
@@ -914,6 +958,23 @@ export const useEditor = create<EditorState>((set, get) => ({
   },
 
   setZoom: (zoom) => set({ zoom }),
+
+  toggleUi: (key) =>
+    set((s) => {
+      const ui = { ...s.ui, [key]: !s.ui[key] }
+      try {
+        localStorage.setItem(UI_KEY, JSON.stringify(ui))
+      } catch {
+        // storage unavailable; keep in-memory only
+      }
+      return { ui }
+    }),
+
+  addGuide: (axis, pos) => writeGuides(get, set, (g) => ({ ...g, [axis]: [...g[axis], Math.round(pos)] })),
+  moveGuide: (axis, index, pos) =>
+    writeGuides(get, set, (g) => ({ ...g, [axis]: g[axis].map((v, i) => (i === index ? Math.round(pos) : v)) })),
+  removeGuide: (axis, index) =>
+    writeGuides(get, set, (g) => ({ ...g, [axis]: g[axis].filter((_, i) => i !== index) })),
 
   setNotes: (notes) => {
     const s = get()

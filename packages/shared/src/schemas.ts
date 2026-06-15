@@ -71,13 +71,16 @@ export const boardElementSchema = z.object({
   align: z.enum(['left', 'center', 'right']).optional()
 })
 
+const guideSetSchema = z.object({ x: z.array(z.number()), y: z.array(z.number()) })
+
 /** Save a single screen design. */
 export const screenSaveSchema = z.object({
   name: z.string().min(1).max(200).optional(),
   device: deviceKindSchema.optional(),
   canvas: z.object({ width: z.number(), height: z.number() }).optional(),
   root: nodeInstanceSchema.optional(),
-  notes: z.string().optional()
+  notes: z.string().optional(),
+  guides: z.object({ pc: guideSetSchema, mobile: guideSetSchema }).optional()
 })
 
 /** Save a flow board (placed screens + connectors). */

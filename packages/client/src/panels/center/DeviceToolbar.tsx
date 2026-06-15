@@ -22,6 +22,8 @@ export function DeviceToolbar() {
   const renameDoc = useEditor((s) => s.renameDoc)
   const autosave = useEditor((s) => s.autosave)
   const toggleAutosave = useEditor((s) => s.toggleAutosave)
+  const ui = useEditor((s) => s.ui)
+  const toggleUi = useEditor((s) => s.toggleUi)
 
   if (!screen || !surface) return null
 
@@ -64,6 +66,18 @@ export function DeviceToolbar() {
         onFocus={checkpoint}
         onChange={(e) => setCanvasSize(screen.canvas.width, Number(e.target.value))}
       />
+      <span className="divider-v" />
+      <div className="segmented">
+        <button className={ui.ruler ? 'active' : ''} onClick={() => toggleUi('ruler')} title={t.ruler}>
+          📏
+        </button>
+        <button className={ui.grid ? 'active' : ''} onClick={() => toggleUi('grid')} title={t.gridLines}>
+          ▦
+        </button>
+        <button className={ui.guides ? 'active' : ''} onClick={() => toggleUi('guides')} title={t.guides}>
+          ╋
+        </button>
+      </div>
       <span className="divider-v" />
       <span className="label">{t.zoom}</span>
       <input type="range" min={0.25} max={1.5} step={0.05} value={zoom} onChange={(e) => setZoom(Number(e.target.value))} />

@@ -1,11 +1,14 @@
-import { memo, useCallback, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { isContainerType, isSpecEmpty, type ElementSpec, type Layout, type NodeInstance } from '@uiux/shared'
-import { selectRoot, selectSurface, useEditor } from '../../state/editorStore'
+import { selectGuides, selectRoot, selectSurface, useEditor } from '../../state/editorStore'
 import { useI18n } from '../../i18n/I18nContext'
 import { absoluteOrigin, findNode } from '../../state/tree'
 import { sendCursor } from '../../lib/collabBus'
 import { renderPrimitive, renderStaticTree } from '../../componentRegistry'
+import { Ruler } from './Ruler'
+
+const RULER = 22
 
 /** Stable per-user color derived from the user id. */
 function userColor(id: string): string {
@@ -133,25 +136,55 @@ type Interaction =
   | { mode: 'move'; startX: number; startY: number; origin: Record<string, Layout>; singleId?: string }
   | { mode: 'resize'; id: string; handle: string; startX: number; startY: number; origin: Layout }
   | { mode: 'groupResize'; handle: string; startX: number; startY: number; box: Box; origins: GroupOrigin[] }
+  | { mode: 'guide'; axis: 'x' | 'y'; index: number }
   | { mode: 'marquee'; startX: number; startY: number; x: number; y: number }
 
 export function Canvas() {
+  const { t } = useI18n()
   const root = useEditor(selectRoot)
   const surface = useEditor(useShallow(selectSurface))
   const zoom = useEditor((s) => s.zoom)
   const remoteCursors = useEditor((s) => s.remoteCursors)
+  const ui = useEditor(useShallow((s) => s.ui))
+  const guides = useEditor(selectGuides)
+  const removeGuide = useEditor((s) => s.removeGuide)
 
+  const hostRef = useRef<HTMLDivElement>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
   const frameRef = useRef<HTMLDivElement>(null)
   const zoomRef = useRef(zoom)
   zoomRef.current = zoom
   const lastCursorSent = useRef(0)
   const itRef = useRef<Interaction>({ mode: 'idle' })
   const [marquee, setMarquee] = useState<{ left: number; top: number; width: number; height: number } | null>(null)
+  // Frame's top-left relative to the host, so the rulers can align their ticks.
+  const [view, setView] = useState({ offX: 0, offY: 0 })
+
+  const updateView = useCallback(() => {
+    const host = hostRef.current
+    const frame = frameRef.current
+    if (!host || !frame) return
+    const hr = host.getBoundingClientRect()
+    const fr = frame.getBoundingClientRect()
+    setView({ offX: fr.left - hr.left, offY: fr.top - hr.top })
+  }, [])
+
+  // Recompute ruler offsets when zoom, canvas size or ruler visibility change.
+  useEffect(() => {
+    const id = requestAnimationFrame(updateView)
+    return () => cancelAnimationFrame(id)
+  }, [zoom, surface?.width, surface?.height, ui.ruler, updateView])
 
   /** Client point → canvas-space (root frame) coordinates. Stable. */
   const toCanvas = useCallback((clientX: number, clientY: number) => {
     const rect = frameRef.current!.getBoundingClientRect()
     return { x: (clientX - rect.left) / zoomRef.current, y: (clientY - rect.top) / zoomRef.current }
+  }, [])
+
+  const onGuideDown = useCallback((e: ReactPointerEvent, axis: 'x' | 'y', index: number) => {
+    e.stopPropagation()
+    itRef.current = { mode: 'guide', axis, index }
+    ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
   }, [])
 
   const onItemPointerDown = useCallback(
@@ -308,6 +341,8 @@ export function Canvas() {
           h: Math.max(8, Math.round(o.layout.h * sy))
         })
       }
+    } else if (it.mode === 'guide') {
+      st.moveGuide(it.axis, it.index, it.axis === 'x' ? Math.round(x) : Math.round(y))
     } else if (it.mode === 'marquee') {
       itRef.current = { ...it, x, y }
       setMarquee({
@@ -345,22 +380,80 @@ export function Canvas() {
     itRef.current = { mode: 'idle' }
   }
 
+  /** Click a ruler to drop a guide at that canvas coordinate. */
+  const onRulerDown = (e: ReactPointerEvent, axis: 'x' | 'y') => {
+    const fr = frameRef.current?.getBoundingClientRect()
+    if (!fr) return
+    const st = useEditor.getState()
+    if (axis === 'x') {
+      const cx = Math.round((e.clientX - fr.left) / zoom)
+      if (cx >= 0 && cx <= width) st.addGuide('x', cx)
+    } else {
+      const cy = Math.round((e.clientY - fr.top) / zoom)
+      if (cy >= 0 && cy <= height) st.addGuide('y', cy)
+    }
+  }
+
   return (
-    <div className="canvas-scroll">
+    <div className="canvas-host" ref={hostRef}>
+      {ui.ruler && (
+        <>
+          <div className="ruler-corner" />
+          <div className="ruler ruler-h" title={t.guides} onPointerDown={(e) => onRulerDown(e, 'x')}>
+            <Ruler axis="x" length={width} zoom={zoom} offset={view.offX} size={RULER} />
+          </div>
+          <div className="ruler ruler-v" title={t.guides} onPointerDown={(e) => onRulerDown(e, 'y')}>
+            <Ruler axis="y" length={height} zoom={zoom} offset={view.offY} size={RULER} />
+          </div>
+        </>
+      )}
       <div
-        ref={frameRef}
-        className="canvas-frame"
-        style={{ width, height, transform: `scale(${zoom})` }}
-        onPointerDown={onCanvasPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onDragOver={(e) => e.preventDefault()}
-        onDrop={(e) => onDropInto(e, 'root')}
+        className="canvas-scroll"
+        ref={scrollRef}
+        onScroll={updateView}
+        style={ui.ruler ? { paddingTop: RULER + 40, paddingLeft: RULER + 40 } : undefined}
       >
-        {root.children.map((c) => (
-          <NodeView key={c.id} node={c} handlers={handlers} />
-        ))}
-        {marquee && (
+        <div
+          ref={frameRef}
+          className="canvas-frame"
+          style={{ width, height, transform: `scale(${zoom})` }}
+          onPointerDown={onCanvasPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={(e) => onDropInto(e, 'root')}
+        >
+          {ui.grid && <div className="canvas-grid" />}
+          {root.children.map((c) => (
+            <NodeView key={c.id} node={c} handlers={handlers} />
+          ))}
+          {ui.guides &&
+            guides.x.map((gx, i) => (
+              <div
+                key={`gx${i}`}
+                className="guide guide-v"
+                style={{ left: gx }}
+                onPointerDown={(e) => onGuideDown(e, 'x', i)}
+                onDoubleClick={() => removeGuide('x', i)}
+                title={t.guides}
+              >
+                <span className="guide-line" />
+              </div>
+            ))}
+          {ui.guides &&
+            guides.y.map((gy, i) => (
+              <div
+                key={`gy${i}`}
+                className="guide guide-h"
+                style={{ top: gy }}
+                onPointerDown={(e) => onGuideDown(e, 'y', i)}
+                onDoubleClick={() => removeGuide('y', i)}
+                title={t.guides}
+              >
+                <span className="guide-line" />
+              </div>
+            ))}
+          {marquee && (
           <div
             className="marquee"
             style={{ left: marquee.left, top: marquee.top, width: marquee.width, height: marquee.height }}
@@ -379,6 +472,7 @@ export function Canvas() {
             </div>
           )
         })}
+        </div>
       </div>
     </div>
   )

@@ -126,6 +126,7 @@ export class KnexAdapter implements StorageAdapter {
     if (patch.canvas !== undefined) row.canvas = JSON.stringify(next.canvas)
     if (patch.root !== undefined) row.root = JSON.stringify(next.root)
     if (patch.notes !== undefined) row.notes = next.notes
+    if (patch.guides !== undefined) row.guides = JSON.stringify(next.guides)
     row.updatedAt = next.updatedAt
     await this.db('screens').where({ id }).update(row)
     return next
@@ -142,6 +143,7 @@ export class KnexAdapter implements StorageAdapter {
       canvas: JSON.stringify(s.canvas),
       root: JSON.stringify(s.root),
       notes: s.notes,
+      guides: s.guides ? JSON.stringify(s.guides) : null,
       createdAt: s.createdAt,
       updatedAt: s.updatedAt
     }
@@ -154,6 +156,7 @@ export class KnexAdapter implements StorageAdapter {
       canvas: this.parse(row.canvas),
       root: this.parse(row.root),
       notes: (row.notes as string) ?? '',
+      guides: row.guides ? this.parse(row.guides as string) : undefined,
       createdAt: row.createdAt as string,
       updatedAt: row.updatedAt as string
     }
